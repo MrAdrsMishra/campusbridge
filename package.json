@@ -1,0 +1,10 @@
+{
+  "name": "campus-bridge",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@campus/web",
+    "dev:api": "npm run start:dev --workspace=@campus/api",
+    "build": "npm run build --workspaces"
+  }
+}

@@ -1,0 +1,31 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports: ["8000:80"]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/campus-bridge}
+      PORT: 3000
+      WEB_ORIGIN: http://localhost:8080
+      JWT_SECRET: ${JWT_SECRET}
+      SETUP_KEY: ${SETUP_KEY}
+      SECRET_KEY: ${SECRET_KEY:-campusbridge-admin-secret}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/colleges', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+ 
