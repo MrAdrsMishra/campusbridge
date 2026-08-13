@@ -30,7 +30,7 @@ export class AuthService {
     return this.session({
       id: "admin",
       name: "Admin",
-      email: "admin@campusbridge.local",
+      email: "admin@nexteduwise.local",
       role: "admin",
     });
   }

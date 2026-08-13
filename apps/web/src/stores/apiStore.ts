@@ -19,7 +19,7 @@ export const useApiStore = create<ApiStore>((_set, get) => ({
   url: (path) => joinUrl(get().baseUrl, path),
   request: (path, init) => fetch(joinUrl(get().baseUrl, path), init),
   authHeaders: () => {
-    const token = localStorage.getItem("campusbridge.accessToken");
+    const token = localStorage.getItem("nexteduwise.accessToken");
     const headers: Record<string, string> = {};
     if (token) {
       headers.Authorization = `Bearer ${token}`;
@@ -27,7 +27,7 @@ export const useApiStore = create<ApiStore>((_set, get) => ({
     return headers;
   },
   clearAuth: () => {
-    localStorage.removeItem("campusbridge.accessToken");
-    localStorage.removeItem("campusbridge.counselor");
+    localStorage.removeItem("nexteduwise.accessToken");
+    localStorage.removeItem("nexteduwise.counselor");
   },
 }));

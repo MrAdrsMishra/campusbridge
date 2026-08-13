@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const authHeaders = useApiStore((state) => state.authHeaders);
   const clearAuth = useApiStore((state) => state.clearAuth);
   const navigate = useNavigate();
-  const counselor = JSON.parse(localStorage.getItem("campusbridge.counselor") ?? "null") as CounselorSession;
+  const counselor = JSON.parse(localStorage.getItem("nexteduwise.counselor") ?? "null") as CounselorSession;
 
   const load = () => {
     return request("/leads", {
@@ -70,7 +70,7 @@ export default function DashboardPage() {
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
               <GraduationCap size={21} />
             </span>
-            campus<span className="text-emerald-600">bridge</span>
+             <span className="text-emerald-600"> nexteduwise</span>
           </Link>
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">

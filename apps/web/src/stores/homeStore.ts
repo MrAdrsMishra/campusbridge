@@ -2,15 +2,15 @@ import { create } from "zustand";
 import type {
   CitySuggestion,
   CollegeDetailView,
-  CollegeSuggestion,
+  CollegeListItem,
   Filters,
   Testimonial,
 } from "../types";
 
 type HomeStore = {
   filters: Filters;
-  suggestions: CollegeSuggestion[];
-  selectedSuggestion: CollegeSuggestion | null;
+  suggestions: CollegeListItem[];
+  selectedSuggestion: CollegeListItem | null;
   selectedCollege: CollegeDetailView | null;
   loadingSuggestions: boolean;
   loadingCollege: boolean;
@@ -20,8 +20,8 @@ type HomeStore = {
   testimonials: Testimonial[];
   citySuggestions: CitySuggestion[];
   setFilter: (key: keyof Filters, value: string) => void;
-  setSuggestions: (suggestions: CollegeSuggestion[]) => void;
-  setSelectedSuggestion: (college: CollegeSuggestion | null) => void;
+  setSuggestions: (suggestions: CollegeListItem[]) => void;
+  setSelectedSuggestion: (college: CollegeListItem | null) => void;
   setSelectedCollege: (college: CollegeDetailView | null) => void;
   setLoadingSuggestions: (loading: boolean) => void;
   setLoadingCollege: (loading: boolean) => void;

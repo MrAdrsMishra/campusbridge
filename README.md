@@ -1,4 +1,4 @@
-# Campus Bridge
+# nexteduwise
 
 College discovery and counselor lead-management platform.
 

@@ -9,3 +9,36 @@
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+
+/* ==== Hero slideshow crossfade ==== */
+.slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.4s ease-in-out; border-radius: 0; }
+.slide.is-active { opacity: 1; }
+
+/* ==== Typewriter caret ==== */
+.typewriter-caret { display: inline-block; width: 3px; height: 1em; margin-left: 2px; vertical-align: -0.15em; background: #c9f36a; animation: caret-blink 0.9s steps(1) infinite; }
+@keyframes caret-blink {
+  50% { opacity: 0; }
+}
+
+/* ==== Floating glassmorphism search card ==== */
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 24px 60px -20px rgba(16, 38, 31, 0.45);
+}
+
+/* ==== Soft float for hero pill ==== */
+@keyframes float-pill {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float-pill { animation: float-pill 5s ease-in-out infinite; }
+
+/* ==== Fade-up entrance ==== */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.7s ease both; }

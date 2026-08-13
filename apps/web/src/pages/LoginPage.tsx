@@ -29,9 +29,9 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    localStorage.setItem("campusbridge.accessToken", data.accessToken);
+    localStorage.setItem("nexteduwise.accessToken", data.accessToken);
     localStorage.setItem(
-      "campusbridge.counselor",
+      "nexteduwise.counselor",
       JSON.stringify(data.counselor),
     );
     navigate(from, { replace: true });
@@ -44,7 +44,7 @@ export default function LoginPage() {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
             <GraduationCap size={21} />
           </span>
-          campus<span className="text-emerald-600">bridge</span>
+           <span className="text-emerald-600"> nexteduwise</span>
         </Link>
         <div className="mt-5 flex items-center justify-between text-sm text-slate-500">
           <Link to="/" className="font-semibold text-emerald-700">

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useHomeStore } from "../stores/homeStore";
 import { ArrowLeft, Building2, GraduationCap, MapPin, RefreshCw, Star } from "lucide-react";
-import { CollegeSuggestion } from "../types";
+import { CollegeListItem } from "../types";
 import { useApiStore } from "../stores/apiStore";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -26,31 +26,31 @@ const CollegeDetail = () => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, []);
 
-  const getTargetCollege = useCallback((): CollegeSuggestion | null => {
+  const getTargetCollege = useCallback((): CollegeListItem | null => {
     if (state?.college) {
       try {
-        sessionStorage.setItem("campusbridge_last_college", JSON.stringify(state.college));
+        sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(state.college));
       } catch { }
-      return state.college as CollegeSuggestion;
+      return state.college as CollegeListItem;
     }
     if (id && suggestions.length > 0) {
-      const match = suggestions.find((s) => s.id === id || s.slug === id);
+      const match = suggestions.find((s) => String(s.instituteId ?? "") === id || s.slug === id);
       if (match) {
         try {
-          sessionStorage.setItem("campusbridge_last_college", JSON.stringify(match));
+          sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(match));
         } catch { }
         return match;
       }
     }
     if (selectedSuggestion) {
       try {
-        sessionStorage.setItem("campusbridge_last_college", JSON.stringify(selectedSuggestion));
+        sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(selectedSuggestion));
       } catch { }
       return selectedSuggestion;
     }
     try {
-      const saved = sessionStorage.getItem("campusbridge_last_college");
-      if (saved) return JSON.parse(saved) as CollegeSuggestion;
+      const saved = sessionStorage.getItem("nexteduwise_last_college");
+      if (saved) return JSON.parse(saved) as CollegeListItem;
     } catch { }
     return null;
   }, [state?.college, id, suggestions, selectedSuggestion]);
@@ -100,7 +100,7 @@ const CollegeDetail = () => {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
             <GraduationCap size={21} />
           </span>
-          campus<span className="text-emerald-600">bridge</span>
+           <span className="text-emerald-600"> nexteduwise</span>
         </Link>
         <div className="flex items-center gap-4">
           <button

@@ -1,5 +1,5 @@
 {
-  "name": "@campus/api",
+  "name": "@ nexteduwise/api",
   "version": "1.0.0",
   "scripts": {
     "start:dev": "nest start --watch",

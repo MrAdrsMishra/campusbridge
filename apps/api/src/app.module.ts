@@ -7,12 +7,13 @@ import { LeadsModule } from "./leads/leads.module";
 import { CounselorsModule } from "./counselors/counselors.module";
 import { AuthModule } from "./auth/auth.module";
 import { TestimonialsModule } from "./testimonials/testimonials.module";
+import * as path from "path";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ envFilePath: path.resolve(__dirname, '../.env'),isGlobal: true }),
     MongooseModule.forRoot(
-      process.env.MONGODB_URI ?? "mongodb://localhost:27017/campus-bridge",
+      process.env.MONGODB_URI ?? "mongodb://localhost:27017/nexteduwise",
     ),
     ScheduleModule.forRoot(),
     CollegesModule,

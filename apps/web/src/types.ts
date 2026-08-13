@@ -17,6 +17,24 @@ export type CollegeSuggestion = {
   logo: string | null;
 };
 
+/** Result of the Shiksha autocomplete step — the frontend uses `url` for the next request. */
+export type ShikshaCategoryResult = {
+  name: string;
+  url: string;
+};
+
+/** A college discovered via Shiksha and resolved against College360 (GET /colleges?url=). */
+export type CollegeListItem = {
+  instituteId: number | null;
+  name: string;
+  logo: string | null;
+  headerImage: string | null;
+  minFees: number | null;
+  maxFees: number | null;
+  slug: string | null;
+  seriesId: number | null;
+};
+
 export type CollegeSearchResponse = {
   searchTerm: string;
   source: "name" | "city";

@@ -8,7 +8,7 @@ import { CounselorPopup } from "./components/CounselorPopup";
 import { Footer } from "./components/Footer";
 
 function DashboardRoute() {
-  const hasSession = Boolean(localStorage.getItem("campusbridge.accessToken"));
+  const hasSession = Boolean(localStorage.getItem("nexteduwise.accessToken"));
 
   if (!hasSession) {
     return <Navigate to="/login" replace state={{ from: "/dashboard" }} />;

@@ -1,7 +1,7 @@
 // src/colleges/dto/college-search-query.dto.ts
 import { BadRequestException, Injectable, PipeTransform } from "@nestjs/common";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsPositive, IsString, Length, Matches } from "class-validator";
+import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length, Matches } from "class-validator";
 import { isValidObjectId } from "mongoose";
 
 export class CollegeSearchQueryDto {
@@ -26,6 +26,22 @@ export class CollegeScrapeQueryDto {
   @IsInt()
   @IsPositive()
   seriesId!: number;
+}
+
+// src/colleges/dto/shiksha-search-query.dto.ts
+export class ShikshaSearchQueryDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 150)
+  query!: string;
+}
+
+// src/colleges/dto/shiksha-college-list-query.dto.ts
+export class ShikshaCollegeListQueryDto {
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 500)
+  url!: string;
 }
 // src/colleges/pipes/parse-object-id.pipe.ts
 

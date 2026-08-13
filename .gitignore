@@ -1,6 +1,9 @@
-.env
-apps/api/.env
 node_modules
 **/node_modules
-dist
 **/dist
+.git
+outputs
+work
+npm-debug.log
+.env
+apps/api/.env

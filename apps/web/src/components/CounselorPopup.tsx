@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { X, Sparkles, Phone, User, Mail, GraduationCap, MapPin, CheckCircle2 } from "lucide-react";
 import { useApiStore } from "../stores/apiStore";
+import { useCounselorPopupStore } from "../stores/counselorPopupStore";
 
 export function CounselorPopup() {
   const MAX_DISMISSALS = 3;
 
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, collegeName, close: closePopup } = useCounselorPopupStore();
   const [submitted, setSubmitted] = useState(() => {
-    return localStorage.getItem("campusbridge_lead_submitted") === "true";
+    return localStorage.getItem("nexteduwise_lead_submitted") === "true";
   });
   const [dismissCount, setDismissCount] = useState(() => {
-    return parseInt(localStorage.getItem("campusbridge_popup_dismissed") ?? "0", 10);
+    return parseInt(localStorage.getItem("nexteduwise_popup_dismissed") ?? "0", 10);
   });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -28,7 +29,7 @@ export function CounselorPopup() {
   // Helper to load session search activity
   const loadSessionActivity = () => {
     try {
-      const activityStr = sessionStorage.getItem("campusbridge_user_activity");
+      const activityStr = sessionStorage.getItem("nexteduwise_user_activity");
       if (activityStr) {
         const activity = JSON.parse(activityStr);
         setForm((prev) => ({
@@ -45,8 +46,8 @@ export function CounselorPopup() {
   const handleDismiss = () => {
     const next = dismissCount + 1;
     setDismissCount(next);
-    localStorage.setItem("campusbridge_popup_dismissed", String(next));
-    setIsOpen(false);
+    localStorage.setItem("nexteduwise_popup_dismissed", String(next));
+    closePopup();
   };
 
   useEffect(() => {
@@ -54,12 +55,12 @@ export function CounselorPopup() {
     if (submitted || dismissCount >= MAX_DISMISSALS) return;
 
     const intervalId = setInterval(() => {
-      if (localStorage.getItem("campusbridge_lead_submitted") === "true") {
+      if (localStorage.getItem("nexteduwise_lead_submitted") === "true") {
         setSubmitted(true);
         return;
       }
       const currentDismissals = parseInt(
-        localStorage.getItem("campusbridge_popup_dismissed") ?? "0",
+        localStorage.getItem("nexteduwise_popup_dismissed") ?? "0",
         10
       );
       if (currentDismissals >= MAX_DISMISSALS) {
@@ -68,8 +69,8 @@ export function CounselorPopup() {
       }
 
       loadSessionActivity();
-      setIsOpen(true);
-    }, 40000); // 40 seconds interval
+      useCounselorPopupStore.getState().open();
+    }, 30000); // 40 seconds interval
 
     return () => clearInterval(intervalId);
   }, [submitted, dismissCount]);
@@ -81,7 +82,7 @@ export function CounselorPopup() {
     // Build a plain-text summary of everything the user searched this session
     let searchActivity: string | undefined;
     try {
-      const raw = sessionStorage.getItem("campusbridge_user_activity");
+      const raw = sessionStorage.getItem("nexteduwise_user_activity");
       if (raw) {
         const act = JSON.parse(raw) as Record<string, string>;
         const parts: string[] = [];
@@ -98,15 +99,15 @@ export function CounselorPopup() {
       const response = await request("/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, ...(searchActivity ? { searchActivity } : {}) }),
+        body: JSON.stringify({ ...form, ...(searchActivity ? { searchActivity } : {}), ...(collegeName ? { collegeQuery: collegeName } : {}) }),
       });
 
       if (response.ok) {
-        localStorage.setItem("campusbridge_lead_submitted", "true");
+        localStorage.setItem("nexteduwise_lead_submitted", "true");
         setSubmitted(true);
         setSuccess(true);
         setTimeout(() => {
-          setIsOpen(false);
+          closePopup();
           setSuccess(false);
         }, 2500);
       }

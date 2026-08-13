@@ -9,8 +9,8 @@ export class CounselorsService implements OnModuleInit {
   async onModuleInit() {
     if (await this.counselors.countDocuments()) return;
     await this.counselors.insertMany([
-      { name: 'Priya Sharma', email: 'priya@campusbridge.in', phone: '+919999999901', passwordHash: 'SET_PASSWORD_WITH_AUTH_SETUP', specializations: ['Engineering', 'MBA'] },
-      { name: 'Arjun Mehta', email: 'arjun@campusbridge.in', phone: '+919999999902', passwordHash: 'SET_PASSWORD_WITH_AUTH_SETUP', specializations: ['Design', 'Commerce'] },
+      { name: 'Priya Sharma', email: 'priya@nexteduwise.in', phone: '+919999999901', passwordHash: 'SET_PASSWORD_WITH_AUTH_SETUP', specializations: ['Engineering', 'MBA'] },
+      { name: 'Arjun Mehta', email: 'arjun@nexteduwise.in', phone: '+919999999902', passwordHash: 'SET_PASSWORD_WITH_AUTH_SETUP', specializations: ['Design', 'Commerce'] },
     ]);
   }
   findAll() { return this.counselors.find({ active: true }).sort({ name: 1 }).lean(); }
