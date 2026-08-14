@@ -1,5 +1,5 @@
 // src/colleges/colleges.controller.ts
-import { Controller, Get, NotFoundException, Query } from "@nestjs/common";
+import { BadRequestException, Controller, Get, NotFoundException, Query } from "@nestjs/common";
 import { CollegesService } from "./colleges.service";
 import {
   CollegeScrapeQueryDto,
@@ -32,10 +32,24 @@ export class CollegesController {
     return this.service.suggest(query);
   }
 
-  // Step 3 — Selected-college detail (slug + seriesId from the list above).
+  // Step 3 — Selected-college detail.
+  // When a `name` is supplied it first resolves the exact College360 url
+  // (slug + seriesId) from the college name, then loads the full details using
+  // that slug + seriesId. With slug + seriesId provided, it loads them directly.
   @Get("details")
   async details(@Query() query: CollegeScrapeQueryDto) {
-    const result = await this.service.getCollegeDetailView(query.slug, query.seriesId);
+    if (query.name?.trim()) {
+      return this.service.getCollegeDetailsByName(query.name);
+    }
+    if (!query.slug || !query.seriesId) {
+      throw new BadRequestException(
+        "Provide either a college name, or a slug and seriesId.",
+      );
+    }
+    const result = await this.service.getCollegeDetailView(
+      query.slug,
+      query.seriesId,
+    );
     if (!result) throw new NotFoundException("College not found");
     return result;
   }

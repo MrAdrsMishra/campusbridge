@@ -1,10 +1,10 @@
 {
-  "name": "@ nexteduwise/api",
+  "name": "@nexteduwise/api",
   "version": "1.0.0",
-  "scripts": {
-    "start:dev": "nest start --watch",
-    "build": "nest build"
-  },
+    "scripts": {
+      "start:dev": "nest start --watch",
+      "build": "nest build"
+    },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
     "@nestjs/config": "^3.3.0",

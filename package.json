@@ -3,10 +3,9 @@
   "private": true,
   "workspaces": ["apps/*"],
   "scripts": {
-    "dev:web": "npm run dev --workspace=@ nexteduwise/web",
-    "dev:api": "npm run start:dev --workspace=@ nexteduwise/api",
+    "dev:web": "npm run dev --workspace=@nexteduwise/web",
+    "dev:api": "npm run start:dev --workspace=@nexteduwise/api",
     "build": "npm run build --workspaces",
-    "start:app":"start npm run start:dev --workspace=@ nexteduwise/api && start npm run dev --workspace=@ nexteduwise/web"
-
+    "start:app": "start npm run start:dev --workspace=@nexteduwise/api && start npm run dev --workspace=@nexteduwise/web"
   }
 }

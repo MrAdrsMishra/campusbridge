@@ -18,14 +18,23 @@ export class CollegeSearchQueryDto {
 const SLUG_PATTERN = /^[A-Za-z0-9-]{3,150}$/;
 
 export class CollegeScrapeQueryDto {
+  @IsOptional()
   @IsString()
   @Matches(SLUG_PATTERN, { message: "slug must match the format returned by the suggestions endpoint" })
-  slug!: string;
+  slug?: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @IsPositive()
-  seriesId!: number;
+  seriesId?: number;
+
+  // Alternative lookup — pass the college name and the service will first resolve
+  // its exact College360 url (slug + seriesId), then load the full details from it.
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  name?: string;
 }
 
 // src/colleges/dto/shiksha-search-query.dto.ts

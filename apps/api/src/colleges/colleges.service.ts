@@ -1,5 +1,12 @@
 // src/colleges/colleges.service.ts
-import { BadGatewayException, BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from "@nestjs/common";
+import {
+  BadGatewayException,
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { College, CollegeDocument } from "./college.schema";
@@ -72,7 +79,10 @@ export type CollegeDetailView = {
     city: string | null;
     state: string | null;
   };
-  coursesByCategory: Record<string, { name: string; shortForm: string | null }[]>;
+  coursesByCategory: Record<
+    string,
+    { name: string; shortForm: string | null }[]
+  >;
   reviews: { rating: number; comment: string }[];
 };
 
@@ -94,7 +104,6 @@ export type CollegeListItem = {
 
 // ============================================================
 // college360 raw response types
-
 
 // ============================================================
 // college360 raw response types
@@ -221,7 +230,8 @@ type ShikshaInstituteTuple = {
 // ============================================================
 
 // const COLLEGE360_API_BASE = "https://backend.college360.co.in/api/college360/v1";
-const COLLEGE360_API_BASE = "https://backend.college360.co.in/api/college360/v1";
+const COLLEGE360_API_BASE =
+  "https://backend.college360.co.in/api/college360/v1";
 const COLLEGE360_ASSET_BASE = "https://dfhe5ze0n4pxu.cloudfront.net";
 
 // Confirmed: requires BOTH url (slug) and seriesId together.
@@ -261,13 +271,25 @@ type CacheEntry<T> = { data: T; expiresAt: number };
 export class CollegesService implements OnModuleInit {
   private readonly logger = new Logger(CollegesService.name);
 
-  private readonly suggestionCache = new Map<string, CacheEntry<CollegeSuggestion[]>>();
+  private readonly suggestionCache = new Map<
+    string,
+    CacheEntry<CollegeSuggestion[]>
+  >();
   // keyed by `${slug}:${seriesId}` since the detail endpoint requires both together.
-  private readonly detailCache = new Map<string, CacheEntry<ScrapedCollegeResult>>();
+  private readonly detailCache = new Map<
+    string,
+    CacheEntry<ScrapedCollegeResult>
+  >();
   // Shiksha category responses, keyed by the category URL.
-  private readonly shikshaCategoryCache = new Map<string, CacheEntry<CollegeListItem[]>>();
+  private readonly shikshaCategoryCache = new Map<
+    string,
+    CacheEntry<CollegeListItem[]>
+  >();
   // College360 name resolution results, keyed by normalized college name.
-  private readonly college360SearchCache = new Map<string, CacheEntry<{ slug: string | null; seriesId: number | null }>>();
+  private readonly college360SearchCache = new Map<
+    string,
+    CacheEntry<{ slug: string | null; seriesId: number | null }>
+  >();
 
   constructor(
     @InjectModel(College.name)
@@ -285,7 +307,10 @@ export class CollegesService implements OnModuleInit {
     const filter: Record<string, unknown> = {};
 
     if (query.course) {
-      filter.courses = { $regex: this.escapeRegExp(query.course), $options: "i" };
+      filter.courses = {
+        $regex: this.escapeRegExp(query.course),
+        $options: "i",
+      };
     }
     for (const field of ["state", "city", "name"] as const) {
       const value = query[field];
@@ -326,7 +351,9 @@ export class CollegesService implements OnModuleInit {
     const course = query.course?.trim();
 
     if (!name && !city) {
-      throw new BadRequestException("Provide at least a college name or a city to search.");
+      throw new BadRequestException(
+        "Provide at least a college name or a city to search.",
+      );
     }
 
     const searchTerm = name || city!;
@@ -335,7 +362,10 @@ export class CollegesService implements OnModuleInit {
     let suggestions = await this.getOrFetchSuggestions(searchTerm);
 
     if (query.course) {
-      suggestions = await this.filterByCourse(suggestions.slice(0, MAX_COURSE_FILTER_LOOKUPS), query.course.trim());
+      suggestions = await this.filterByCourse(
+        suggestions.slice(0, MAX_COURSE_FILTER_LOOKUPS),
+        query.course.trim(),
+      );
     }
 
     return { searchTerm, suggestions: suggestions.slice(0, MAX_SUGGESTIONS) };
@@ -364,7 +394,9 @@ export class CollegesService implements OnModuleInit {
 
     const raw = await this.fetchJson<ShikshaAutosuggestResponse>(url);
     if (!raw || raw.status !== "success" || !raw.data?.solrResults?.length) {
-      throw new BadGatewayException("Shiksha search is temporarily unavailable.");
+      throw new BadGatewayException(
+        "Shiksha search is temporarily unavailable.",
+      );
     }
 
     const results = raw.data.solrResults;
@@ -373,7 +405,9 @@ export class CollegesService implements OnModuleInit {
       results.find((r) => r.url && this.isShikshaCategoryUrl(r.url));
 
     if (!relevant?.url) {
-      throw new NotFoundException(`No matching category found for "${keyword}".`);
+      throw new NotFoundException(
+        `No matching category found for "${keyword}".`,
+      );
     }
 
     return { name: relevant.name, url: relevant.url };
@@ -385,76 +419,66 @@ export class CollegesService implements OnModuleInit {
    * name is resolved to a College360 slug + seriesId with controlled concurrency. Unmatched
    * colleges are returned with null slug/seriesId instead of failing the whole request.
    */
- async getCollegesFromShiksha(url: string): Promise<CollegeListItem[]> {
-  const categoryUrl = this.normalizeShikshaCategoryUrl(url);
+  async getCollegesFromShiksha(url: string): Promise<CollegeListItem[]> {
+    const categoryUrl = this.normalizeShikshaCategoryUrl(url);
 
-  const cached = this.getCached(
-    this.shikshaCategoryCache,
-    categoryUrl,
-  );
+    const cached = this.getCached(this.shikshaCategoryCache, categoryUrl);
 
-  if (cached) return cached;
+    if (cached) return cached;
 
-  const requestUrl = `${SHIKSHA_CATEGORY_ENDPOINT}?data=${encodeURIComponent(
-    Buffer.from(JSON.stringify({ url: categoryUrl })).toString("base64"),
-  )}`;
+    const requestUrl = `${SHIKSHA_CATEGORY_ENDPOINT}?data=${encodeURIComponent(
+      Buffer.from(JSON.stringify({ url: categoryUrl })).toString("base64"),
+    )}`;
 
-  const raw = await this.fetchJson<ShikshaCategoryResponse>(requestUrl);
+    const raw = await this.fetchJson<ShikshaCategoryResponse>(requestUrl);
 
-  if (
-    !raw ||
-    raw.status !== "success" ||
-    !Array.isArray(raw.data?.instituteTuples)
-  ) {
-    throw new BadGatewayException(
-      "Shiksha category data is temporarily unavailable.",
+    if (
+      !raw ||
+      raw.status !== "success" ||
+      !Array.isArray(raw.data?.instituteTuples)
+    ) {
+      throw new BadGatewayException(
+        "Shiksha category data is temporarily unavailable.",
+      );
+    }
+
+    const list: CollegeListItem[] = raw.data.instituteTuples.map((tuple) => ({
+      instituteId: tuple.instituteId ?? null,
+      name: tuple.name?.trim() ?? "",
+      logo: this.formatAssetUrl(tuple.logoImageUrl),
+      headerImage: this.formatAssetUrl(tuple.instituteHeaderImageUrl),
+      minFees: tuple.minFees ?? null,
+      maxFees: tuple.maxFees ?? null,
+    }));
+
+    this.setCached(
+      this.shikshaCategoryCache,
+      categoryUrl,
+      list,
+      SHIKSHA_CATEGORY_CACHE_TTL_MS,
     );
+
+    return list;
   }
+  async getCollegeDetailsByName(
+    name: string,
+  ): Promise<CollegeDetailView | null> {
+    const collegeName = name.trim();
 
-  const list: CollegeListItem[] = raw.data.instituteTuples.map((tuple) => ({
-    instituteId: tuple.instituteId ?? null,
-    name: tuple.name?.trim() ?? "",
-    logo: this.formatAssetUrl(tuple.logoImageUrl),
-    headerImage: this.formatAssetUrl(tuple.instituteHeaderImageUrl),
-    minFees: tuple.minFees ?? null,
-    maxFees: tuple.maxFees ?? null,
-  }));
+    if (!collegeName) {
+      throw new BadRequestException("College name is required.");
+    }
 
-  this.setCached(
-    this.shikshaCategoryCache,
-    categoryUrl,
-    list,
-    SHIKSHA_CATEGORY_CACHE_TTL_MS,
-  );
+    const resolved = await this.resolveCollegeOnCollege360(collegeName);
 
-  return list;
-}
-async getCollegeDetailsByName(
-  name: string,
-): Promise<CollegeDetailView | null> {
-  const collegeName = name.trim();
+    if (!resolved.slug || resolved.seriesId === null) {
+      throw new NotFoundException(
+        `College "${collegeName}" could not be found.`,
+      );
+    }
 
-  if (!collegeName) {
-    throw new BadRequestException(
-      "College name is required.",
-    );
+    return this.getCollegeDetailView(resolved.slug, resolved.seriesId);
   }
-
-  const resolved = await this.resolveCollegeOnCollege360(
-    collegeName,
-  );
-
-  if (!resolved.slug || resolved.seriesId === null) {
-    throw new NotFoundException(
-      `College "${collegeName}" could not be found.`,
-    );
-  }
-
-  return this.getCollegeDetailView(
-    resolved.slug,
-    resolved.seriesId,
-  );
-}
   /**
    * Resolve a single Shiksha college name against College360.
    * Searches by the exact name, then matches in two tiers:
@@ -463,52 +487,132 @@ async getCollegeDetailsByName(
    *      threshold — so a college with no plausible College360 entry still gets null/null.
    * Caches the outcome per normalized name for 10 minutes.
    */
+  COLLEGE360_NAME_ALIASES: Record<string, string> = {
+    "sushila devi bansal college of technology bansal group of institutes":
+      "sushila devi bansal college indore",
+
+    "shri vaishnav institute of technology and science":
+      "shri vaishnav institute of management svim indore",
+  };
+
+  // ============================================================
+  // College360 name resolution
+  // ============================================================
+
   private async resolveCollegeOnCollege360(
     name: string,
   ): Promise<{ slug: string | null; seriesId: number | null }> {
-    if (!name) return { slug: null, seriesId: null };
+    if (!name?.trim()) {
+      return { slug: null, seriesId: null };
+    }
 
     const key = this.normalizeCollegeName(name);
+
     const cached = this.getCached(this.college360SearchCache, key);
+
     if (cached) return cached;
 
-    // Tier-before-match: some College360 searches return nothing for a long "Brand - Full Name"
-    // string, but succeed on a shorter/acronym query. Collect candidates across a few safe
-    // query variants (full name, pre-" - " acronym, pre-first-comma). Bounded and cached, so the
-    // extra one-off call per name is acceptable.
-    const candidates = await this.collectCollege360Candidates(name);
-    let resolved: { slug: string | null; seriesId: number | null } = { slug: null, seriesId: null };
+    const alias = this.COLLEGE360_NAME_ALIASES[key];
+    const aliasKey = alias ? this.normalizeCollegeName(alias) : null;
 
-    // Tier 1 — normalized exact match.
-    const exact = candidates.filter((r) => this.normalizeCollegeName(r.name) === key);
-    if (exact.length >= 1) {
-      if (exact.length > 1) {
-        this.logger.debug(`Ambiguous exact College360 match for "${name}" — using first.`);
+    const candidates = await this.collectCollege360Candidates(name);
+
+    let resolved: {
+      slug: string | null;
+      seriesId: number | null;
+    } = {
+      slug: null,
+      seriesId: null,
+    };
+
+    // ==========================================================
+    // Tier 1 — explicit alias match
+    // ==========================================================
+
+    if (aliasKey) {
+      const aliasMatch = candidates.find(
+        (candidate) => this.normalizeCollegeName(candidate.name) === aliasKey,
+      );
+
+      if (aliasMatch) {
+        this.logger.debug(
+          `Alias College360 match: "${name}" -> "${aliasMatch.name}"`,
+        );
+
+        resolved = {
+          slug: aliasMatch.url,
+          seriesId: aliasMatch.seriesId,
+        };
+
+        this.setCached(
+          this.college360SearchCache,
+          key,
+          resolved,
+          COLLEGE360_NAME_CACHE_TTL_MS,
+        );
+
+        return resolved;
       }
-      resolved = { slug: exact[0].url, seriesId: exact[0].seriesId };
+    }
+
+    // ==========================================================
+    // Tier 2 — normalized exact-name match
+    // ==========================================================
+
+    const exact = candidates.filter(
+      (candidate) => this.normalizeCollegeName(candidate.name) === key,
+    );
+
+    if (exact.length > 0) {
+      if (exact.length > 1) {
+        this.logger.debug(
+          `Ambiguous exact College360 match for "${name}" — using first.`,
+        );
+      }
+
+      resolved = {
+        slug: exact[0].url,
+        seriesId: exact[0].seriesId,
+      };
     } else {
-      // Tier 2 — best token-overlap score, only if it clears the threshold.
+      // ========================================================
+      // Tier 3 — fuzzy token-overlap match
+      // ========================================================
+
       const scored = candidates
-        .map((r) => ({
-          result: r,
-          score: this.collegeNameSimilarity(key, this.normalizeCollegeName(r.name)),
+        .map((candidate) => ({
+          result: candidate,
+          score: this.collegeNameSimilarity(
+            key,
+            this.normalizeCollegeName(candidate.name),
+          ),
         }))
         .sort((a, b) => b.score - a.score);
 
-      if (scored.length && scored[0].score >= COLLEGE360_MATCH_THRESHOLD) {
-        resolved = { slug: scored[0].result.url, seriesId: scored[0].result.seriesId };
+      if (scored.length > 0 && scored[0].score >= COLLEGE360_MATCH_THRESHOLD) {
+        resolved = {
+          slug: scored[0].result.url,
+          seriesId: scored[0].result.seriesId,
+        };
+
         this.logger.debug(
-          `Fuzzy College360 match for "${name}" -> "${scored[0].result.name}" (score ${scored[0].score.toFixed(2)}).`,
+          `Fuzzy College360 match for "${name}" -> "${scored[0].result.name}" ` +
+            `(score ${scored[0].score.toFixed(2)}).`,
         );
       } else {
         this.logger.debug(`No confident College360 match for "${name}".`);
       }
     }
 
-    this.setCached(this.college360SearchCache, key, resolved, COLLEGE360_NAME_CACHE_TTL_MS);
+    this.setCached(
+      this.college360SearchCache,
+      key,
+      resolved,
+      COLLEGE360_NAME_CACHE_TTL_MS,
+    );
+
     return resolved;
   }
-
   /**
    * Jaccard-style token coverage: |query ∩ candidate| / min(|query|, |candidate|).
    * Rewards candidates that contain the query's significant words (handles College360's
@@ -523,33 +627,69 @@ async getCollegeDetailsByName(
     return overlaps / Math.min(aTokens.length, bTokens.length);
   }
 
-  /** Safe query variants for a College360 name lookup — full name, pre-“ - ” acronym, pre-first-comma. */
+  /**
+   * Safe query variants for a College360 name lookup.
+   *
+   * Includes:
+   * - original Shiksha name
+   * - explicit College360 alias
+   * - text before " - "
+   * - text before the first comma
+   */
   private buildCollege360Queries(name: string): string[] {
     const queries = new Set<string>();
     const trimmed = name.trim();
-    if (trimmed) queries.add(trimmed);
 
+    if (!trimmed) return [];
+
+    // Original name
+    queries.add(trimmed);
+
+    // Explicit alias
+    const normalized = this.normalizeCollegeName(trimmed);
+    const alias = this.COLLEGE360_NAME_ALIASES[normalized];
+
+    if (alias) {
+      queries.add(alias);
+    }
+
+    // Existing safe variants
     const dashIndex = trimmed.indexOf(" - ");
+
     if (dashIndex > 0) {
       const segment = trimmed.slice(0, dashIndex).trim();
-      if (segment) queries.add(segment);
+
+      if (segment) {
+        queries.add(segment);
+      }
     }
+
     const commaIndex = trimmed.indexOf(", ");
+
     if (commaIndex > 0) {
       const segment = trimmed.slice(0, commaIndex).trim();
-      if (segment) queries.add(segment);
+
+      if (segment) {
+        queries.add(segment);
+      }
     }
+
     return [...queries];
   }
 
   /** Gather deduplicated College360 search candidates across the safe query variants. */
-  private async collectCollege360Candidates(name: string): Promise<College360SearchResult[]> {
+  private async collectCollege360Candidates(
+    name: string,
+  ): Promise<College360SearchResult[]> {
     const queries = this.buildCollege360Queries(name);
     const seen = new Set<string>();
     const merged: College360SearchResult[] = [];
 
     for (const query of queries) {
-      const results = (await this.fetchJson<College360SearchResult[]>(COLLEGE360_SEARCH_ENDPOINT(query))) ?? [];
+      const results =
+        (await this.fetchJson<College360SearchResult[]>(
+          COLLEGE360_SEARCH_ENDPOINT(query),
+        )) ?? [];
       for (const result of results) {
         if (result.url && !seen.has(result.url)) {
           seen.add(result.url);
@@ -590,37 +730,39 @@ async getCollegeDetailsByName(
   // ---- college360 detail (step 2: user picked one) ----
 
   /** Full detail payload — courses with branches, all reviews mapped, etc. */
-  async scrape(slug: string, seriesId: number): Promise<ScrapedCollegeResult | null> {
+  async scrape(
+    slug: string,
+    seriesId: number,
+  ): Promise<ScrapedCollegeResult | null> {
     return this.fetchDetail(slug, seriesId);
   }
 
   /** Trimmed view for the college detail screen: name, short desc, logo, bg image, address, courses by category, top reviews. */
- async getCollegeDetailView(
-  slug: string,
-  seriesId: number,
-): Promise<CollegeDetailView | null> {
-  const scraped = await this.fetchDetail(slug, seriesId);
+  async getCollegeDetailView(
+    slug: string,
+    seriesId: number,
+  ): Promise<CollegeDetailView | null> {
+    const scraped = await this.fetchDetail(slug, seriesId);
 
-  if (!scraped) return null;
+    if (!scraped) return null;
 
-  return {
-    name: scraped.name,
-    shortDescription: scraped.about,
-    logo: scraped.image,
-    backgroundImage: scraped.backgroundImage,
-    photos: scraped.photos,
-    address: {
-      full: scraped.fullAddress,
-      city: scraped.city,
-      state: scraped.state,
-    },
-    coursesByCategory:
-      this.simplifyCoursesByCategory(
+    return {
+      name: scraped.name,
+      shortDescription: scraped.about,
+      logo: scraped.image,
+      backgroundImage: scraped.backgroundImage,
+      photos: scraped.photos,
+      address: {
+        full: scraped.fullAddress,
+        city: scraped.city,
+        state: scraped.state,
+      },
+      coursesByCategory: this.simplifyCoursesByCategory(
         scraped.coursesByCategory,
       ),
-    reviews: scraped.reviews,
-  };
-}
+      reviews: scraped.reviews,
+    };
+  }
 
   /** Persists a scraped result into your own `colleges` collection. */
   async scrapeAndSave(slug: string, seriesId: number) {
@@ -630,7 +772,9 @@ async getCollegeDetailsByName(
     // Flatten "category — course name" to fit the schema's plain string[] `courses`.
     // Branches are intentionally dropped here to avoid bloating a single string field;
     // they remain available via scrape()/getCollegeDetailView() for anyone who needs them.
-    const flattenedCourses = scraped.courses.map((c) => `${c.category} — ${c.name}`);
+    const flattenedCourses = scraped.courses.map(
+      (c) => `${c.category} — ${c.name}`,
+    );
 
     // Your schema requires `name` on each review; college360 has no reviewer name field,
     // so a placeholder is used here only for the persisted copy — the live detail view
@@ -665,7 +809,9 @@ async getCollegeDetailsByName(
   // Suggestion fetch + cache
   // ============================================================
 
-  private async getOrFetchSuggestions(searchTerm: string): Promise<CollegeSuggestion[]> {
+  private async getOrFetchSuggestions(
+    searchTerm: string,
+  ): Promise<CollegeSuggestion[]> {
     const cached = this.getCached(this.suggestionCache, searchTerm);
     if (cached) return cached;
 
@@ -681,7 +827,12 @@ async getCollegeDetailsByName(
       logo: this.formatAssetUrl(item.logo),
     }));
 
-    this.setCached(this.suggestionCache, searchTerm, suggestions, SUGGESTION_CACHE_TTL_MS);
+    this.setCached(
+      this.suggestionCache,
+      searchTerm,
+      suggestions,
+      SUGGESTION_CACHE_TTL_MS,
+    );
     return suggestions;
   }
 
@@ -689,16 +840,22 @@ async getCollegeDetailsByName(
   // Course post-filter (fan-out capped + batched)
   // ============================================================
 
-  private async filterByCourse(candidates: CollegeSuggestion[], course: string): Promise<CollegeSuggestion[]> {
+  private async filterByCourse(
+    candidates: CollegeSuggestion[],
+    course: string,
+  ): Promise<CollegeSuggestion[]> {
     const courseLower = course.toLowerCase();
     const matched: CollegeSuggestion[] = [];
 
     for (let i = 0; i < candidates.length; i += COURSE_FILTER_CONCURRENCY) {
       const batch = candidates.slice(i, i + COURSE_FILTER_CONCURRENCY);
-      const details = await Promise.all(batch.map((c) => this.fetchDetail(c.slug, c.seriesId)));
+      const details = await Promise.all(
+        batch.map((c) => this.fetchDetail(c.slug, c.seriesId)),
+      );
 
       batch.forEach((candidate, idx) => {
-        const courseNames = details[idx]?.courses.map((c) => c.name.toLowerCase()) ?? [];
+        const courseNames =
+          details[idx]?.courses.map((c) => c.name.toLowerCase()) ?? [];
         if (courseNames.some((c) => c.includes(courseLower))) {
           matched.push(candidate);
         }
@@ -712,12 +869,17 @@ async getCollegeDetailsByName(
   // Detail fetch + cache + mapping
   // ============================================================
 
-  private async fetchDetail(slug: string, seriesId: number): Promise<ScrapedCollegeResult | null> {
+  private async fetchDetail(
+    slug: string,
+    seriesId: number,
+  ): Promise<ScrapedCollegeResult | null> {
     const cacheKey = `${slug}:${seriesId}`;
     const cached = this.getCached(this.detailCache, cacheKey);
     if (cached) return cached;
 
-    const raw = await this.fetchJson<College360DetailResponse>(COLLEGE_DETAIL_ENDPOINT(slug, seriesId));
+    const raw = await this.fetchJson<College360DetailResponse>(
+      COLLEGE_DETAIL_ENDPOINT(slug, seriesId),
+    );
     if (!raw?.data?.info) return null;
 
     const info = raw.data.info;
@@ -733,13 +895,17 @@ async getCollegeDetailsByName(
       about: this.stripHtml(info.sortDescription),
       courses,
       coursesByCategory: this.groupCoursesByCategory(courses),
-      facilities: (info.facilitites ?? []).map((f) => f.facility).filter(Boolean),
+      facilities: (info.facilitites ?? [])
+        .map((f) => f.facility)
+        .filter(Boolean),
       reviews: this.mapTopReviews(info.review, TOP_REVIEWS_LIMIT),
       image: this.formatAssetUrl(info.logo),
       backgroundImage: this.formatAssetUrl(info.backgroundImg),
       photos: this.mapPhotos(info.photos),
       averageFees: this.computeAverageFee(info.fee),
-      aggregateRating: info.aggregateRatingValue ? Number(info.aggregateRatingValue) : null,
+      aggregateRating: info.aggregateRatingValue
+        ? Number(info.aggregateRatingValue)
+        : null,
     };
 
     this.setCached(this.detailCache, cacheKey, result, DETAIL_CACHE_TTL_MS);
@@ -770,7 +936,9 @@ async getCollegeDetailsByName(
       }));
   }
 
-  private groupCoursesByCategory(courses: ScrapedCourse[]): Record<string, ScrapedCourse[]> {
+  private groupCoursesByCategory(
+    courses: ScrapedCourse[],
+  ): Record<string, ScrapedCourse[]> {
     const grouped: Record<string, ScrapedCourse[]> = {};
     for (const course of courses) {
       (grouped[course.category] ??= []).push(course);
@@ -781,9 +949,15 @@ async getCollegeDetailsByName(
   private simplifyCoursesByCategory(
     grouped: Record<string, ScrapedCourse[]>,
   ): Record<string, { name: string; shortForm: string | null }[]> {
-    const simplified: Record<string, { name: string; shortForm: string | null }[]> = {};
+    const simplified: Record<
+      string,
+      { name: string; shortForm: string | null }[]
+    > = {};
     for (const [category, courses] of Object.entries(grouped)) {
-      simplified[category] = courses.map((c) => ({ name: c.name, shortForm: c.shortForm }));
+      simplified[category] = courses.map((c) => ({
+        name: c.name,
+        shortForm: c.shortForm,
+      }));
     }
     return simplified;
   }
@@ -793,7 +967,10 @@ async getCollegeDetailsByName(
    * `rating` (0–10 scale, confirmed from sample data). Sorted by rating descending,
    * top N returned.
    */
-  private mapTopReviews(rawReviews?: College360Review[], limit = TOP_REVIEWS_LIMIT): ScrapedCollegeReview[] {
+  private mapTopReviews(
+    rawReviews?: College360Review[],
+    limit = TOP_REVIEWS_LIMIT,
+  ): ScrapedCollegeReview[] {
     if (!rawReviews?.length) return [];
 
     return [...rawReviews]
@@ -812,14 +989,19 @@ async getCollegeDetailsByName(
    */
   private computeAverageFee(fees?: College360Fee[]): number | null {
     if (!fees?.length) return null;
-    const amounts = fees.map((f) => Number(f.amount)).filter((n) => !Number.isNaN(n));
+    const amounts = fees
+      .map((f) => Number(f.amount))
+      .filter((n) => !Number.isNaN(n));
     if (!amounts.length) return null;
     return Math.round(amounts.reduce((sum, n) => sum + n, 0) / amounts.length);
   }
 
   private stripHtml(value?: string): string | null {
     if (!value) return null;
-    return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   // ============================================================
@@ -850,7 +1032,10 @@ async getCollegeDetailsByName(
     }
   }
 
-  private getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  private getCached<T>(
+    cache: Map<string, CacheEntry<T>>,
+    key: string,
+  ): T | null {
     const entry = cache.get(key);
     if (!entry || entry.expiresAt < Date.now()) {
       cache.delete(key);
@@ -859,7 +1044,12 @@ async getCollegeDetailsByName(
     return entry.data;
   }
 
-  private setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T, ttlMs: number) {
+  private setCached<T>(
+    cache: Map<string, CacheEntry<T>>,
+    key: string,
+    data: T,
+    ttlMs: number,
+  ) {
     cache.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
 
@@ -867,7 +1057,9 @@ async getCollegeDetailsByName(
     if (!path) return null;
     if (path.startsWith("http://") || path.startsWith("https://")) {
       if (path.includes("college360.co.in/")) {
-        return path.replace("https://college360.co.in/", `${COLLEGE360_ASSET_BASE}/`).replace("http://college360.co.in/", `${COLLEGE360_ASSET_BASE}/`);
+        return path
+          .replace("https://college360.co.in/", `${COLLEGE360_ASSET_BASE}/`)
+          .replace("http://college360.co.in/", `${COLLEGE360_ASSET_BASE}/`);
       }
       return path;
     }
