@@ -9,9 +9,10 @@ import type { Request, Response, NextFunction } from "express";
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // In production (single Docker image) the built SPA lives at <project>/apps/web/dist.
-  // __dirname = <project>/apps/api/dist, so the relative path resolves correctly.
-  const staticDir = join(__dirname, "..", "web", "dist");
+  // In production the built SPA lives at <project>/apps/web/dist.
+  // __dirname = <project>/apps/api/dist, so we must go up TWO levels
+  // (apps/api/dist -> apps/api -> apps) to reach the repo root's apps/web/dist.
+  const staticDir = join(__dirname, "..", "..", "web", "dist");
   app.useStaticAssets(staticDir, { index: false });
 
   // SPA fallback — serve index.html for any unmatched GET that isn't an API route.
