@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
-import { navLinkClass } from "../components/ui";
 import { useApiStore } from "../stores/apiStore";
 
 export default function LoginPage() {

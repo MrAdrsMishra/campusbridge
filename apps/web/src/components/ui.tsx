@@ -12,12 +12,16 @@ export function formatImageUrl(path?: string | null): string | null {
   return `${CDN_BASE_URL}/${cleanPath}`;
 }
 
-export function navLinkClass({ isActive }: { isActive: boolean }) {
-  return `transition ${isActive ? "text-emerald-700" : "text-slate-600 hover:text-ink"}`;
-}
-
-export function actionLinkClass({ isActive }: { isActive: boolean }) {
-  return `rounded-full px-4 py-2 text-sm font-bold ${isActive ? "bg-ink text-white" : "border border-slate-200"}`;
+/**
+ * Upgrade a Shiksha/College360 resized thumbnail (e.g. ".../<id>_270x200.jpg") to the
+ * original full-quality image by stripping the `_<width>x<height>` size token. Use this
+ * where an image is displayed large (like the hero background) instead of the small thumb.
+ * URLs without a size token are returned unchanged.
+ */
+export function fullImageUrl(path?: string | null): string | null {
+  const formatted = formatImageUrl(path);
+  if (!formatted) return null;
+  return formatted.replace(/_\d+x\d+(?=\.[A-Za-z0-9]+(?:\?[^/]*)?$)/, "");
 }
 
 export function SearchBox({
@@ -69,6 +73,7 @@ export function Field({
         name={name}
         required={required}
         className="mt-2 w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-400"
+        placeholder={`Enter your ${label.toLocaleLowerCase()}`}
       />
     </label>
   );

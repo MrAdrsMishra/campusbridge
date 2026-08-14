@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import  { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, Download, GraduationCap } from "lucide-react";
 import type { CounselorSession, Lead } from "../types";
-import { actionLinkClass, Metric, Status } from "../components/ui";
+import { Metric, Status } from "../components/ui";
 import { LeadPanel } from "../components/Modals";
 import { useApiStore } from "../stores/apiStore";
 import { useDashboardStore } from "../stores/dashboardStore";

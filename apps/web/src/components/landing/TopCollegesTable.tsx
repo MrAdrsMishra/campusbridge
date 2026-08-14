@@ -61,19 +61,7 @@ export function TopCollegesTable({ colleges, loading, activeCategory, onOpenColl
     window.setTimeout(() => setToast(null), 2600);
   };
 
-  const downloadBrochure = (name: string) => {
-    const content = `nexteduwise — ${name}\nOfficial brochure (sample)\n\nFee, cutoff and placement details are available on the college detail page.`;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name.replace(/\s+/g, "-").toLowerCase()}-brochure.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast("Brochure download started");
-  };
+ 
 
   if (loading) {
     return (
@@ -157,9 +145,9 @@ export function TopCollegesTable({ colleges, loading, activeCategory, onOpenColl
                       <span className="block max-w-52 font-extrabold leading-snug text-ink">
                         {college.name}
                       </span>
-                      <span className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                        <MapPin size={13} className="text-emerald-600" /> {meta.state}
-                      </span>
+                      {/* <span className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                        <MapPin size={13} className="text-emerald-600" /> { }
+                      </span> */}
                     </span>
                   </button>
                 </td>
@@ -191,12 +179,7 @@ export function TopCollegesTable({ colleges, loading, activeCategory, onOpenColl
                     >
                       Apply Now
                     </button>
-                    <button
-                      onClick={() => downloadBrochure(college.name)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-emerald-500 hover:text-emerald-700"
-                    >
-                      <Download size={14} /> Brochure
-                    </button>
+                   
                   </div>
                 </td>
               </tr>
@@ -221,9 +204,9 @@ export function TopCollegesTable({ colleges, loading, activeCategory, onOpenColl
                 <h3 className="block max-w-[230px] font-extrabold leading-snug text-ink truncate">
                   {college.name}
                 </h3>
-                <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                  <MapPin size={13} className="text-emerald-600" /> {meta.state}
-                </p>
+                {/* <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                  <MapPin size={13} className="text-emerald-600" /> {sessionStorage.getItem('nexteduwise_prefered_location')}
+                </p> */}
               </div>
             </div>
 
@@ -264,10 +247,7 @@ export function TopCollegesTable({ colleges, loading, activeCategory, onOpenColl
               >
                 Apply Now
               </button>
-              <button onClick={() => downloadBrochure(college.name)} className="inline-flex items-center gap-1 rounded-xl border border-slate-300 px-3 py-1 text-xs font-bold text-slate-600">
-                <Download size={14} /> Brochure
-              </button>
-            </div>
+            </div> 
           </article>
         ))}
       </div>

@@ -1,14 +1,23 @@
 import React, { useEffect } from "react";
 import { GraduationCap, Star } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import type { CitySuggestion, CollegeListItem, Filters, ShikshaCategoryResult, Testimonial } from "../types";
-import { navLinkClass } from "../components/ui";
+import type {
+  CitySuggestion,
+  CollegeListItem,
+  Filters,
+  ShikshaCategoryResult,
+  Testimonial,
+} from "../types";
 import { useApiStore } from "./apiStore";
 import { useHomeStore } from "./homeStore";
+import { useLocationPopupStore } from "./locationPopupStore";
 import { HeroSection } from "../components/landing/HeroSection";
 import { SearchSection } from "../components/landing/SearchSection";
 import { TopCollegesTable } from "../components/landing/TopCollegesTable";
-import { CourseCategories } from "../components/landing/CourseCategories";
+import {
+  CATEGORY_SEARCH_MAP,
+  CourseCategories,
+} from "../components/landing/CourseCategories";
 import { HowItWorks } from "../components/landing/HowItWorks";
 import { LeadCapture } from "../components/landing/LeadCapture";
 import { Testimonials } from "../components/landing/Testimonials";
@@ -36,9 +45,12 @@ export default function HomePage() {
     setCitySuggestions,
   } = useHomeStore();
   const request = useApiStore((state) => state.request);
+  const openLocationPopup = useLocationPopupStore((state) => state.open);
   const location = useLocation();
   const navigate = useNavigate();
-  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as
+    | string
+    | undefined;
 
   const updateFilterAndActivity = (key: keyof Filters, value: string) => {
     setFilter(key, value);
@@ -52,7 +64,7 @@ export default function HomePage() {
           state: updated.state,
           name: updated.name,
           searchedAt: new Date().toISOString(),
-        })
+        }),
       );
     } catch {}
   };
@@ -70,6 +82,46 @@ export default function HomePage() {
     return `${categoryUrl.slice(0, idx + marker.length)}${citySlug}`;
   };
 
+  /**
+   * Read the user's saved preferred location (city/state) from sessionStorage.
+   * The DesiredLocationPopup persists this when the user picks a city.
+   */
+  const readPreferredLocation = (): { city: string; state: string } => {
+    try {
+      const raw = sessionStorage.getItem("nexteduwise_preferred_location");
+      if (!raw) return { city: "", state: "" };
+      const parsed = JSON.parse(raw) as { city?: string; state?: string };
+      return {
+        city: parsed.city?.trim() ?? "",
+        state: parsed.state?.trim() ?? "",
+      };
+    } catch {
+      return { city: "", state: "" };
+    }
+  };
+
+  // === College list session cache ===
+  // Keep the last successful results so refresh / back-navigation don't refetch
+  // unnecessarily. The cache is replaced on every new search.
+  const SUGGESTIONS_CACHE_KEY = "nexteduwise_colleges_cache";
+
+  const readCachedSuggestions = (): CollegeListItem[] | null => {
+    try {
+      const raw = sessionStorage.getItem(SUGGESTIONS_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as CollegeListItem[];
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const cacheSuggestions = (list: CollegeListItem[]) => {
+    try {
+      sessionStorage.setItem(SUGGESTIONS_CACHE_KEY, JSON.stringify(list));
+    } catch {}
+  };
+
   const search = async (overrides?: Partial<Filters>) => {
     const effective = { ...filters, ...overrides };
     try {
@@ -81,13 +133,15 @@ export default function HomePage() {
           state: effective.state,
           name: effective.name,
           searchedAt: new Date().toISOString(),
-        })
+        }),
       );
     } catch {}
 
-    // Shiksha → College360 flow. Default/initial load is Engineering colleges in Bhopal.
+    // Shiksha → College360 flow. Default/initial load is Engineering colleges
+    // for the user's saved location (falling back to Bhopal when none is set).
     const course = effective.course?.trim() || "Engineering";
-    const city = effective.city?.trim() || ["Bhopal","Indore","Pune","Hydrabad","Chennai","Mumbai","Kolkata"][(Math.random()*10)%7]
+    const preferred = readPreferredLocation();
+    const city = effective.city?.trim() || preferred.city || "bhopal";
     const keyword = effective.name?.trim() || course;
 
     setLoadingSuggestions(true);
@@ -95,15 +149,23 @@ export default function HomePage() {
     setSelectedSuggestion(null);
 
     try {
-      const searchResponse = await request(`/colleges/search?query=${encodeURIComponent(keyword)}`);
-      if (!searchResponse.ok) throw new Error(`Shiksha search failed (${searchResponse.status})`);
+      const searchResponse = await request(
+        `/colleges/search?query=${encodeURIComponent(keyword)}`,
+      );
+      if (!searchResponse.ok)
+        throw new Error(`Shiksha search failed (${searchResponse.status})`);
       const category = (await searchResponse.json()) as ShikshaCategoryResult;
       const categoryUrl = toShikshaCityUrl(category.url || "", city);
 
-      const listResponse = await request(`/colleges?url=${encodeURIComponent(categoryUrl)}`);
-      if (!listResponse.ok) throw new Error(`College list failed (${listResponse.status})`);
+      const listResponse = await request(
+        `/colleges?url=${encodeURIComponent(categoryUrl)}`,
+      );
+      if (!listResponse.ok)
+        throw new Error(`College list failed (${listResponse.status})`);
       const list = (await listResponse.json()) as CollegeListItem[];
-      setSuggestions(Array.isArray(list) ? list : []);
+      const next = Array.isArray(list) ? list : [];
+      setSuggestions(next);
+      cacheSuggestions(next);
     } catch {
       setSuggestions([]);
     } finally {
@@ -111,7 +173,15 @@ export default function HomePage() {
     }
   };
 
+  // Initial load: reuse the session-cached list if available to avoid a redundant
+  // API call on refresh / navigation back. A new search overwrites the cache.
   useEffect(() => {
+    const cached = readCachedSuggestions();
+    if (cached && cached.length > 0) {
+      setSuggestions(cached);
+      setLoadingSuggestions(false);
+      return;
+    }
     void search();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
@@ -132,7 +202,9 @@ export default function HomePage() {
           setCitySuggestions([]);
           return;
         }
-        const data = (await response.json()) as { suggestions?: CitySuggestion[] };
+        const data = (await response.json()) as {
+          suggestions?: CitySuggestion[];
+        };
         setCitySuggestions(data.suggestions ?? []);
       } catch {
         setCitySuggestions([]);
@@ -144,18 +216,26 @@ export default function HomePage() {
   // Load testimonials
   useEffect(() => {
     void request("/testimonials")
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Testimonials request failed (${response.status})`);
+        }
+        return response.json();
+      })
       .then((data) => setTestimonials(Array.isArray(data) ? data : []))
-      .catch(() => setTestimonials([]));
+      .catch((err) => {
+        console.error("Failed to load testimonials", err);
+        setTestimonials([]);
+      });
   }, [request, setTestimonials]);
 
   // Hash-based smooth scroll
   useEffect(() => {
-    if (location.hash === "#dashboard") {
+    if (location.hash === "dashboard") {
       navigate("/dashboard", { replace: true });
       return;
     }
-    if (location.hash === "#login") {
+    if (location.hash === "login") {
       navigate("/login", { replace: true });
       return;
     }
@@ -176,7 +256,10 @@ export default function HomePage() {
         if (act.city) parts.push(`City: ${act.city}`);
         if (act.state) parts.push(`State: ${act.state}`);
         if (act.course) parts.push(`Course: ${act.course}`);
-        if (act.searchedAt) parts.push(`Searched at: ${new Date(act.searchedAt).toLocaleString()}`);
+        if (act.searchedAt)
+          parts.push(
+            `Searched at: ${new Date(act.searchedAt).toLocaleString()}`,
+          );
         if (parts.length) payload.searchActivity = parts.join(" | ");
       }
     } catch {}
@@ -212,20 +295,30 @@ export default function HomePage() {
   };
 
   const openCollege = (college: CollegeListItem) => {
-    if (!college.slug || college.seriesId == null) {
-      // No College360 match for this college — its detail page cannot be resolved.
-      window.alert("Detailed info isn't available for this college yet.");
-      return;
-    }
-    const targetId = String(college.instituteId ?? college.slug);
+    // Resolve by name → exact College360 url → fetch details by that url.
+    // The backend's getCollegeDetailsByName handles the resolution internally.
     setSelectedCollege(null);
     setSelectedSuggestion(college);
+    const targetId = String(college.instituteId ?? college.slug ?? college.name ?? "");
     navigate(`/college-detail/${targetId}`, { state: { college } });
+  };
+  const onExplore = (category: string) => {
+    const query = CATEGORY_SEARCH_MAP[category] ?? category;
+    applyCategory(query);
   };
   const applyCategory = (category: string) => {
     updateFilterAndActivity("course", category);
+    const preferred = readPreferredLocation();
+    if (!preferred.city) {
+      // No preferred location saved yet — ask the user to pick one first.
+      // Colleges are loaded only once we know where they want to study.
+      openLocationPopup();
+      return;
+    }
     void search({ course: category });
-    document.getElementById("colleges")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById("colleges")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -235,38 +328,58 @@ export default function HomePage() {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
             <GraduationCap size={21} />
           </span>
-           <span className="text-emerald-600"> nexteduwise</span>
+          <span className="text-emerald-600"> nexteduwise</span>
         </Link>
         <div className="hidden gap-8 text-sm font-medium md:flex">
-          <NavLink to={{ pathname: "/", hash: "#colleges" }} className={navLinkClass}>
+          <NavLink
+            to={{ pathname: "/", hash: "colleges" }}
+            className="text-emerald-700"
+          >
             Find colleges
           </NavLink>
-          <NavLink to={{ pathname: "/", hash: "#courses" }} className={navLinkClass}>
+          <NavLink
+            to={{ pathname: "/", hash: "courses" }}
+            className="text-emerald-700"
+          >
             Courses
           </NavLink>
-          <NavLink to={{ pathname: "/", hash: "#how" }} className={navLinkClass}>
+          <NavLink
+            to={{ pathname: "/", hash: "how" }}
+            className="text-emerald-700"
+          >
             How it works
           </NavLink>
-          <NavLink to="/dashboard" className={navLinkClass}>
+          <NavLink to="/dashboard" className="text-emerald-700">
             Counselor dashboard
           </NavLink>
-          <NavLink to="/login" className={navLinkClass}>
+          <NavLink to="/login" className="text-emerald-700">
             Login
           </NavLink>
         </div>
-        <Link to="/login" className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white">
+        <Link
+          to="/login"
+          className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white"
+        >
           Talk to an expert
         </Link>
       </nav>
 
       <HeroSection
+        colleges={suggestions}
         onFind={(quick) => {
           updateFilterAndActivity("city", quick.city);
           updateFilterAndActivity("course", quick.course);
           updateFilterAndActivity("state", quick.state);
           updateFilterAndActivity("name", quick.name);
-          void search({ city: quick.city, course: quick.course, state: quick.state, name: quick.name });
-          document.getElementById("colleges")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          void search({
+            city: quick.city,
+            course: quick.course,
+            state: quick.state,
+            name: quick.name,
+          });
+          document
+            .getElementById("colleges")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
 
@@ -289,17 +402,20 @@ export default function HomePage() {
         onOpenCollege={openCollege}
       />
 
-      <CourseCategories onSelect={applyCategory} />
+      <CourseCategories onSelect={applyCategory} onExplore={onExplore} />
 
       <HowItWorks />
 
       <LeadCapture sent={sent} onSubmit={enquire} />
 
       <Testimonials testimonials={testimonials} />
-{/* Feedback form */}
-      <section id="feedback" className="border-t border-slate-100 bg-[#f8faf7] py-16">
+      {/* Feedback form */}
+      <section
+        id="feedback"
+        className="border-t border-slate-100 bg-[#f8faf7] py-16"
+      >
         <div className="mx-auto max-w-3xl px-6">
-          <p className="eyebrow">Share your experience</p>
+          {/* <p className="eyebrow">Share your experience</p> */}
           <h2 className="section-title">Tell us how nexteduwise helped you</h2>
           <p className="mt-3 max-w-xl text-sm text-slate-600">
             Your feedback helps fellow students make informed college decisions.
@@ -319,7 +435,9 @@ export default function HomePage() {
                 />
               </label>
               <div>
-                <span className="block text-xs font-bold text-slate-700">Rating</span>
+                <span className="block text-xs font-bold text-slate-700">
+                  Rating
+                </span>
                 <div className="mt-1.5 flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2">
                   {[1, 2, 3, 4, 5].map((value) => (
                     <button
@@ -329,10 +447,15 @@ export default function HomePage() {
                       className={`rounded-full p-1 transition ${value <= rating ? "text-amber-500" : "text-slate-300"}`}
                       onClick={() => setRating(value)}
                     >
-                      <Star size={20} fill={value <= rating ? "currentColor" : "none"} />
+                      <Star
+                        size={20}
+                        fill={value <= rating ? "currentColor" : "none"}
+                      />
                     </button>
                   ))}
-                  <span className="ml-auto text-xs font-bold text-amber-600">{rating} / 5</span>
+                  <span className="ml-auto text-xs font-bold text-amber-600">
+                    {rating} / 5
+                  </span>
                 </div>
               </div>
             </div>

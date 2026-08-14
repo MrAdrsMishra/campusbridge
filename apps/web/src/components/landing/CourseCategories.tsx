@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ArrowUpRight, ChevronDown, ChevronUp } from "lucide-react";
+import { useCourseCategoryStore } from "../../stores/courseCategoryStore";
  
 const coursesByCategory: Record<
   string,
@@ -300,7 +301,7 @@ const DEFAULT_DISPLAY = {
 };
 
  
- const CATEGORY_SEARCH_MAP: Record<string, string> = {
+export const CATEGORY_SEARCH_MAP: Record<string, string> = {
   "Engineering & Technology": "Engineering",
   "Management & Business": "Management",
   "Medical & Healthcare": "Medical",
@@ -324,9 +325,11 @@ export function CourseCategories({
   onExplore,
 }: {
   onSelect: (course: string) => void;
-  onExplore: (category: string) => void;
+  onExplore: (course: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const { showAllCourses, handleExpandCourseView } =
+    useCourseCategoryStore();
 
   const categories = Object.entries(coursesByCategory);
   const visibleCategories = showAll ? categories : categories.slice(0, 6);
@@ -348,15 +351,16 @@ export function CourseCategories({
           </p>
         </div>
       </div>
-
+      {/* this section shows the categorywise courses */}
       <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {visibleCategories.map(([category, courses]) => {
           const display = CATEGORY_DISPLAY[category] ?? DEFAULT_DISPLAY;
-
+          const expanded = showAllCourses[category];
+          const visibleCourses = expanded ? courses : courses.slice(0, 4);
           return (
             <article
               key={category}
-              onClick={() => onExplore(category)}
+               
               className={`group relative cursor-pointer overflow-hidden rounded-3xl border border-slate-100 bg-gradient-to-br ${display.color} p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/5`}
             >
               <div className="flex items-start justify-between">
@@ -383,13 +387,11 @@ export function CourseCategories({
                 </p>
 
                 <div className="space-y-2">
-                  {courses.slice(0, 4).map((course, idx) => (
+                  {visibleCourses.map((course, idx) => (
                     <button
                       key={`${course.name}-${idx}`}
                       onClick={(e) => {
                         e.stopPropagation();
-
-                        // Individual course → search result
                         onSelect(course.name);
                       }}
                       className="flex w-full items-center justify-between rounded-xl border border-white/70 bg-white/60 px-3 py-2 text-left transition hover:bg-white"
@@ -412,14 +414,13 @@ export function CourseCategories({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-
-                      // Do NOT search.
-                      // Open the broader exploration flow.
-                      onExplore(category);
+                      handleExpandCourseView(category);
                     }}
                     className="mt-3 text-xs font-bold text-emerald-700 hover:text-emerald-800"
                   >
-                    + {courses.length - 4} more programs
+                    {expanded
+                      ? "Show less"
+                      : `+ ${courses.length - 4} more programs`}
                   </button>
                 )}
               </div>
@@ -438,7 +439,7 @@ export function CourseCategories({
                   className="mt-3 flex w-full items-center justify-between"
                 >
                   <span className="text-sm font-extrabold text-emerald-700">
-                    Explore options
+                    Explore Colleges
                   </span>
 
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 transition group-hover:bg-emerald-600 group-hover:text-white">

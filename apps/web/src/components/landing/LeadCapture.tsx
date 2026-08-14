@@ -75,14 +75,14 @@ export function LeadCapture({ sent, onSubmit }: Props) {
 
           <div className="mt-6 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field name="name" label="Full Name" required />
-              <Field name="phone" label="Phone Number" required />
+              <Field name="name" label="Full Name"  required />
+              <Field name="phone" label="Phone Number"  required />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field name="email" label="Email Address" required />
-              <Field name="course" label="Preferred Course" required />
+              <Field name="email" label="Email Address"  required />
+              <Field name="course" label="Preferred Course"  required />
             </div>
-            <Field name="city" label="Target City" required />
+            <Field name="city" label="Target City"  required />
 
             <button
               type="submit"

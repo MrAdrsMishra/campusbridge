@@ -58,20 +58,30 @@ const CollegeDetail = () => {
   const targetCollege = getTargetCollege();
 
   const fetchCollege = useCallback(async () => {
-    if (!targetCollege?.slug || !targetCollege?.seriesId) {
-      return;
-    }
+    if (!targetCollege) return;
 
     setLoadingCollege(true);
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        slug: targetCollege.slug,
-        seriesId: String(targetCollege.seriesId),
-      });
+      let response: Response;
 
-      const response = await request(`/colleges/details?${params.toString()}`);
+      if (targetCollege.slug && targetCollege.seriesId) {
+        // Fast path — the college was already resolved to a College360 slug + seriesId.
+        const params = new URLSearchParams({
+          slug: targetCollege.slug,
+          seriesId: String(targetCollege.seriesId),
+        });
+        response = await request(`/colleges/details?${params.toString()}`);
+      } else if (targetCollege.name) {
+        // Resolve by name → find the exact College360 url → fetch details by that url.
+        response = await request(
+          `/colleges/details?name=${encodeURIComponent(targetCollege.name)}`,
+        );
+      } else {
+        throw new Error("No way to resolve this college.");
+      }
+
       if (!response.ok) {
         throw new Error(`Failed to fetch college details (${response.status})`);
       }
@@ -79,7 +89,7 @@ const CollegeDetail = () => {
       const data = await response.json();
       setSelectedCollege(data);
     } catch {
-      setError("Unable to load college details. Please try again later.");
+      setError("Something went wrong on our end. We couldn't fetch the college information just now.");
     } finally {
       setLoadingCollege(false);
     }
@@ -115,24 +125,135 @@ const CollegeDetail = () => {
 
       <section className="mx-auto max-w-4xl px-6 pb-20 pt-6">
         {isFetching && (
-          <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
-            <p className="text-sm font-medium text-slate-500">Loading college details...</p>
-          </div>
-        )}
+  <div className="space-y-6">
+    {/* College header skeleton */}
+    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          {/* Logo */}
+          <div className="h-16 w-16 shrink-0 rounded-2xl bg-slate-200" />
 
-        {error && !loadingCollege && !selectedCollege && (
-          <div className="rounded-3xl border border-rose-100 bg-rose-50/50 p-8 text-center">
-            <p className="text-sm font-semibold text-rose-700">{error}</p>
-            <button
-              type="button"
-              onClick={() => void fetchCollege()}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white"
-            >
-              <RefreshCw size={14} /> Try again
-            </button>
+          <div className="flex-1 space-y-3">
+            {/* College name */}
+            <div className="h-7 w-64 rounded-lg bg-slate-200 sm:w-96" />
+
+            {/* Location */}
+            <div className="h-4 w-40 rounded-md bg-slate-100" />
           </div>
-        )}
+        </div>
+
+        {/* Refresh button */}
+        <div className="h-10 w-36 rounded-2xl bg-slate-100" />
+      </div>
+
+      {/* Background image */}
+      <div className="mt-6 h-64 w-full rounded-2xl bg-slate-200 sm:h-80" />
+
+      {/* Address / description */}
+      <div className="mt-6 space-y-4 rounded-2xl bg-slate-50 p-5">
+        <div className="h-4 w-3/4 rounded-md bg-slate-200" />
+        <div className="h-4 w-full rounded-md bg-slate-200" />
+        <div className="h-4 w-5/6 rounded-md bg-slate-200" />
+      </div>
+    </div>
+
+    {/* Courses skeleton */}
+    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+      <div className="h-4 w-32 rounded-md bg-slate-200" />
+
+      <div className="mt-6 space-y-6">
+        <div>
+          <div className="h-4 w-40 rounded-md bg-slate-200" />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="h-8 w-28 rounded-full bg-slate-100" />
+            <div className="h-8 w-36 rounded-full bg-slate-100" />
+            <div className="h-8 w-24 rounded-full bg-slate-100" />
+            <div className="h-8 w-32 rounded-full bg-slate-100" />
+          </div>
+        </div>
+
+        <div>
+          <div className="h-4 w-36 rounded-md bg-slate-200" />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="h-8 w-32 rounded-full bg-slate-100" />
+            <div className="h-8 w-24 rounded-full bg-slate-100" />
+            <div className="h-8 w-40 rounded-full bg-slate-100" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Reviews skeleton */}
+    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+      <div className="h-4 w-32 rounded-md bg-slate-200" />
+
+      <div className="mt-6 space-y-4">
+        <div className="rounded-2xl bg-slate-50 p-5">
+          <div className="h-4 w-20 rounded-md bg-slate-200" />
+          <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
+          <div className="mt-2 h-4 w-4/5 rounded-md bg-slate-100" />
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 p-5">
+          <div className="h-4 w-20 rounded-md bg-slate-200" />
+          <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
+          <div className="mt-2 h-4 w-3/4 rounded-md bg-slate-100" />
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+      {error && !loadingCollege && !selectedCollege && (
+  <div className="flex min-h-[420px] items-center justify-center">
+    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+      {/* Error icon */}
+      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose-50 ring-8 ring-rose-50/50">
+        <Building2 size={28} className="text-rose-500" />
+      </div>
+
+      {/* Message */}
+      <div className="mt-6">
+        <h2 className="text-xl font-extrabold text-slate-900">
+          Unable to load college
+        </h2>
+
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+          We couldn't load the college details right now. This may be a
+          temporary issue. Please try again.
+        </p>
+      </div>
+
+      {/* Actions */}
+      <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => void fetchCollege()}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+        >
+          <RefreshCw size={15} />
+          Try again
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate("/#colleges")}
+          className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          Back to colleges
+        </button>
+      </div>
+
+      {/* Subtle status */}
+      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+        Something went wrong while fetching the details
+      </div>
+    </div>
+  </div>
+)}
 
         {!targetCollege && !selectedCollege && !loadingCollege && !error && (
           <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">

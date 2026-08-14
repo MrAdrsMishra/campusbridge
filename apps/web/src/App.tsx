@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import CollegeDetail from "./pages/CollegeDetail";
 import { CounselorPopup } from "./components/CounselorPopup";
 import { Footer } from "./components/Footer";
+import { DesiredLocationPopup } from "./components/DesiredLocationPopup";
 
 function DashboardRoute() {
   const hasSession = Boolean(localStorage.getItem("nexteduwise.accessToken"));
@@ -32,6 +33,7 @@ export default function App() {
           </Routes>
         </div>
         <Footer />
+        <DesiredLocationPopup/>
         <CounselorPopup />
       </div>
     </BrowserRouter>

@@ -1,14 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { GraduationCap, MapPin, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { HERO_SLIDES, TYPED_PHRASES, TRUST_BADGES } from "../../data/landingData";
 import { useTypewriter } from "../../hooks/useTypewriter";
+import type { CollegeListItem } from "../../types";
+import { fullImageUrl } from "../ui";
 
 const SLIDE_MS = 5000;
 
 export function HeroSection({
   onFind,
+  colleges = [],
 }: {
   onFind: (filters: { city: string; name: string; state: string; course: string }) => void;
+  colleges?: CollegeListItem[];
 }) {
   const [active, setActive] = useState(0);
   const [city, setCity] = useState("");
@@ -17,25 +21,51 @@ export function HeroSection({
   const [course, setCourse] = useState("");
   const { text } = useTypewriter(TYPED_PHRASES);
 
+  // Background slides come from the colleges' header images, so the hero shows real
+  // campus photos with the college name in the corner. Falls back to the generic
+  // HERO_SLIDES when no college has a header image yet.
+  const slides = useMemo(() => {
+    const collegeSlides = colleges
+      .filter((c) => c.headerImage)
+      .map((c) => ({ image: fullImageUrl(c.headerImage) ?? "", name: c.name }));
+    if (collegeSlides.length > 0) return collegeSlides;
+    return HERO_SLIDES.map((src) => ({ image: src, name: null }));
+  }, [colleges]);
+
+  const current = slides[active % slides.length];
+
   useEffect(() => {
-    const id = window.setInterval(() => setActive((a) => (a + 1) % HERO_SLIDES.length), SLIDE_MS);
+    if (slides.length === 0) return;
+    const id = window.setInterval(() => setActive((a) => (a + 1) % slides.length), SLIDE_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [slides.length]);
 
   return (
     <section id="top" className="relative overflow-hidden bg-ink">
       {/* Crossfading slideshow */}
       <div className="absolute inset-0">
-        {HERO_SLIDES.map((src, index) => (
+        {slides.map((slide, index) => (
           <img
-            key={src}
-            src={src}
-            alt="University  nexteduwise"
+            key={slide.image}
+            src={slide.image}
+            alt={slide.name ?? "University  nexteduwise"}
             loading={index === 0 ? "eager" : "lazy"}
-            className={`slide ${active === index ? "is-active" : ""}`}
+            className={`slide ${active % slides.length === index ? "is-active" : ""}`}
           />
         ))}
-       </div>
+      </div>
+
+      {/* College name for the current background image — bottom-right corner */}
+      {current?.name && (
+        <div className="absolute bottom-4 right-4 z-10 rounded-2xl border border-white/20 bg-black/45 px-4 py-2.5 text-right backdrop-blur-sm sm:bottom-6 sm:right-6">
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-lime">
+            Featured college
+          </p>
+          <p className="max-w-[240px] truncate text-sm font-extrabold text-white sm:text-base">
+            {current.name}
+          </p>
+        </div>
+      )}
 
       <div className="relative mx-auto flex w-full flex-col items-center justify-between pb-24 pt-16 text-center sm:pt-24">
       {/* Eyebrow pill  */}
