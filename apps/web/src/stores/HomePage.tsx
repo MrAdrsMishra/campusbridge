@@ -152,6 +152,7 @@ export default function HomePage() {
       const searchResponse = await request(
         `/colleges/search?query=${encodeURIComponent(keyword)}`,
       );
+      console.log(searchResponse.body)
       if (!searchResponse.ok)
         throw new Error(`Shiksha search failed (${searchResponse.status})`);
       const category = (await searchResponse.json()) as ShikshaCategoryResult;

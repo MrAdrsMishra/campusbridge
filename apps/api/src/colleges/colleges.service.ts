@@ -249,6 +249,8 @@ const SHIKSHA_AUTOSUGGEST_ENDPOINT = `${SHIKSHA_API_BASE}/autosuggestorApi/v1/in
 const SHIKSHA_CATEGORY_ENDPOINT = `${SHIKSHA_API_BASE}/categorypageapi/v4/info/getCategoryPageFull`;
 
 const FETCH_TIMEOUT_MS = 8_000;
+const FETCH_MAX_RETRIES = 2;
+const FETCH_RETRY_BASE_DELAY_MS = 800;
 const SUGGESTION_CACHE_TTL_MS = 10 * 60 * 1000;
 const DETAIL_CACHE_TTL_MS = 60 * 60 * 1000;
 const SHIKSHA_CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -260,6 +262,36 @@ const COURSE_FILTER_CONCURRENCY = 4;
 // Minimum token-overlap score (0..1) for the College360 name-resolution fallback.
 const COLLEGE360_MATCH_THRESHOLD = 0.75;
 const TOP_REVIEWS_LIMIT = 5;
+
+// ============================================================
+// Browser headers for third-party API requests
+// ============================================================
+//
+// The Shiksha and College360 API gateways are fronted by a WAF
+// (e.g. Cloudflare) that rejects requests that don't carry a
+// browser-like User-Agent — returning HTTP 403. Node's native
+// fetch sends a minimal/default UA ("node"/"undici") which
+// trips that bot-detection. Without a real-browser UA,
+// Accept-Language, Referer, Origin, and sec-fetch-* headers the
+// gateway treats the request as a bot and blocks it.
+//
+// The User-Agent can be overridden via the BROWSER_USER_AGENT
+// environment variable for debugging or if it stops working.
+const BROWSER_USER_AGENT =
+  process.env.BROWSER_USER_AGENT ??
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
+const DEFAULT_FETCH_HEADERS: Record<string, string> = {
+  accept: "application/json, text/plain, */*",
+  "User-Agent": BROWSER_USER_AGENT,
+  "Accept-Language": "en-US,en;q=0.9",
+  Origin: "https://www.shiksha.com",
+  Referer: "https://www.shiksha.com/",
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-site",
+};
 
 type CacheEntry<T> = { data: T; expiresAt: number };
 
@@ -391,7 +423,6 @@ export class CollegesService implements OnModuleInit {
     const url = `${SHIKSHA_AUTOSUGGEST_ENDPOINT}?data=${encodeURIComponent(
       Buffer.from(JSON.stringify(payload)).toString("base64"),
     )}`;
-
     const raw = await this.fetchJson<ShikshaAutosuggestResponse>(url);
     if (!raw || raw.status !== "success" || !raw.data?.solrResults?.length) {
       throw new BadGatewayException(
@@ -1009,27 +1040,64 @@ export class CollegesService implements OnModuleInit {
   // ============================================================
 
   private async fetchJson<T>(url: string): Promise<T | null> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { accept: "application/json" },
-      });
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: DEFAULT_FETCH_HEADERS,
+        });
 
-      if (!response.ok) {
-        this.logger.warn(`Non-OK response (${response.status}) from ${url}`);
-        return null;
+        if (response.ok) {
+          return (await response.json()) as T;
+        }
+
+        const body = await response.text().catch(() => "<unreadable>");
+        // Retry on bot-detection (403) and transient server errors
+        // (429, 5xx); other non-OK codes fail immediately.
+        const retryable =
+          response.status === 403 ||
+          response.status === 429 ||
+          response.status >= 500;
+
+        if (!retryable || attempt === FETCH_MAX_RETRIES) {
+          this.logger.warn(
+            `Non-OK response (${response.status}) from ${url}` +
+              ` — body: ${body.slice(0, 500)}`,
+          );
+          return null;
+        }
+
+        this.logger.warn(
+          `Non-OK response (${response.status}) from ${url},` +
+            ` retrying (${attempt + 1}/${FETCH_MAX_RETRIES})...` +
+            ` — body: ${body.slice(0, 200)}`,
+        );
+
+        const delay =
+          FETCH_RETRY_BASE_DELAY_MS * 2 ** attempt;
+        await new Promise((r) => setTimeout(r, delay));
+      } catch (error) {
+        if (attempt === FETCH_MAX_RETRIES) {
+          this.logger.warn(
+            `Fetch failed for ${url}: ${(error as Error).message}`,
+          );
+          return null;
+        }
+        this.logger.warn(
+          `Fetch failed for ${url} on attempt ${attempt + 1}:` +
+            ` ${(error as Error).message}`,
+        );
+        const delay = FETCH_RETRY_BASE_DELAY_MS * 2 ** attempt;
+        await new Promise((r) => setTimeout(r, delay));
+      } finally {
+        clearTimeout(timeout);
       }
-
-      return (await response.json()) as T;
-    } catch (error) {
-      this.logger.warn(`Fetch failed for ${url}: ${(error as Error).message}`);
-      return null;
-    } finally {
-      clearTimeout(timeout);
     }
+
+    return null;
   }
 
   private getCached<T>(

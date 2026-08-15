@@ -1,11 +1,10 @@
 {
   "name": "nexteduwise",
   "private": true,
-  "workspaces": ["apps/*"],
   "scripts": {
-    "dev:web": "npm run dev --workspace=@nexteduwise/web",
-    "dev:api": "npm run start:dev --workspace=@nexteduwise/api",
-    "build": "npm run build --workspaces",
-    "start:app": "start npm run start:dev --workspace=@nexteduwise/api && start npm run dev --workspace=@nexteduwise/web"
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && npm run start:dev",
+    "build:web": "cd apps/web && npm run build",
+    "build:api": "cd apps/api && npm run build"
   }
 }

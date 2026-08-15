@@ -46,7 +46,7 @@ export function HeroSection({
       <div className="absolute inset-0">
         {slides.map((slide, index) => (
           <img
-            key={slide.image}
+            key={index}
             src={slide.image}
             alt={slide.name ?? "University  nexteduwise"}
             loading={index === 0 ? "eager" : "lazy"}
