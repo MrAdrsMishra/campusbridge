@@ -105,10 +105,10 @@ const CollegeDetail = () => {
 
   return (
     <main className="min-h-screen bg-[#fbfcfa] text-ink">
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <Link to="/" className="flex items-center gap-2 text-xl font-extrabold">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
-            <GraduationCap size={21} />
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 sm:py-5 border-b border-slate-100 bg-white">
+        <Link to="/" className="flex items-center gap-2 text-lg sm:text-xl font-extrabold shrink-0">
+          <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-xl bg-ink text-lime">
+            <GraduationCap size={20} />
           </span>
            <span className="text-emerald-600"> nexteduwise</span>
         </Link>
@@ -116,14 +116,14 @@ const CollegeDetail = () => {
           <button
             type="button"
             onClick={() => navigate("/#colleges")}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800"
           >
-            <ArrowLeft size={16} /> Back to colleges
+            <ArrowLeft size={15} /> <span className="hidden sm:inline">Back to colleges</span><span className="sm:hidden">Back</span>
           </button>
         </div>
       </header>
 
-      <section className="mx-auto max-w-4xl px-6 pb-20 pt-6">
+      <section className="mx-auto max-w-4xl px-4 sm:px-6 pb-16 pt-5">
         {isFetching && (
   <div className="space-y-6">
     {/* College header skeleton */}

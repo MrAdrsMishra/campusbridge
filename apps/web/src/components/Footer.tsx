@@ -5,48 +5,48 @@ import { GraduationCap, Mail, MapPin, Phone, MessageCircle, ShieldCheck, Headset
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-10 sm:py-16">
+        <div className="grid gap-8 sm:gap-10 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand Column */}
           <div className="lg:col-span-2">
-            <Link to="/" className="inline-flex items-center gap-2 text-2xl font-extrabold text-white">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-lime text-ink">
-                <GraduationCap size={24} />
+            <Link to="/" className="inline-flex items-center gap-2 text-xl sm:text-2xl font-extrabold text-white">
+              <span className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-xl bg-lime text-ink">
+                <GraduationCap size={22} />
               </span>
                <span className="text-emerald-400"> nexteduwise</span>
             </Link>
-            <p className="mt-4 max-w-sm text-sm leading-6 text-slate-400">
+            <p className="mt-3 sm:mt-4 max-w-sm text-xs sm:text-sm leading-relaxed text-slate-400">
               Your trusted admission navigation platform. We help students discover verified colleges, compare courses, and get 1:1 counseling guidance.
             </p>
 
             {/* Trust badges */}
-            <div className="mt-6 grid gap-2">
+            <div className="mt-5 flex flex-wrap gap-2">
               {[
-                { icon: <ShieldCheck size={15} />, label: "Verified College Partners" },
-                { icon: <Headset size={15} />, label: "1:1 Admission Guidance" },
-                { icon: <HandCoins size={15} />, label: "Zero-Cost Counseling" },
+                { icon: <ShieldCheck size={14} />, label: "Verified College Partners" },
+                { icon: <Headset size={14} />, label: "1:1 Admission Guidance" },
+                { icon: <HandCoins size={14} />, label: "Zero-Cost Counseling" },
               ].map((badge) => (
                 <span
                   key={badge.label}
-                  className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-800/50 bg-emerald-950/60 px-3.5 py-1.5 text-[11px] font-bold text-emerald-300"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-800/50 bg-emerald-950/60 px-3 py-1 text-[11px] font-bold text-emerald-300"
                 >
                   {badge.icon} {badge.label}
                 </span>
               ))}
             </div>
 
-            <div className="mt-6 flex items-center gap-3">
+            <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               <a
                 href="https://wa.me/919039220551"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-950/80 border border-emerald-800/50 px-4 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900"
+                className="inline-flex justify-center items-center gap-2 rounded-xl bg-emerald-950/80 border border-emerald-800/50 px-4 py-2.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-900"
               >
                 <MessageCircle size={15} /> WhatsApp Guidance
               </a>
               <a
                 href="tel:+919039220551"
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                className="inline-flex justify-center items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
               >
                 <Phone size={15} /> Call Counselor
               </a>

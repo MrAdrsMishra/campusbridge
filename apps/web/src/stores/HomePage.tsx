@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { GraduationCap, Star } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { GraduationCap, Menu, Star, X } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import type {
   CitySuggestion,
@@ -322,47 +322,108 @@ export default function HomePage() {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <main className="min-h-screen bg-[#fbfcfa] text-ink">
-      <nav className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <Link to="/" className="flex items-center gap-2 text-xl font-extrabold">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">
-            <GraduationCap size={21} />
+      <nav className="relative z-30 mx-auto flex w-full items-center justify-between px-4 py-3.5 sm:px-6 sm:py-5 border-b border-slate-100/80 bg-white/90 backdrop-blur-md sticky top-0">
+        <Link to="/" className="flex items-center gap-2 text-lg sm:text-xl font-extrabold shrink-0">
+          <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-xl bg-ink text-lime">
+            <GraduationCap size={20} />
           </span>
-          <span className="text-emerald-600"> nexteduwise</span>
+          <span className="text-emerald-600 tracking-tight">nexteduwise</span>
         </Link>
-        <div className="hidden gap-8 text-sm font-medium md:flex">
+        <div className="hidden gap-7 text-sm font-semibold md:flex">
           <NavLink
             to={{ pathname: "/", hash: "colleges" }}
-            className="text-emerald-700"
+            className="text-slate-700 hover:text-emerald-600 transition"
           >
             Find colleges
           </NavLink>
           <NavLink
             to={{ pathname: "/", hash: "courses" }}
-            className="text-emerald-700"
+            className="text-slate-700 hover:text-emerald-600 transition"
           >
             Courses
           </NavLink>
           <NavLink
             to={{ pathname: "/", hash: "how" }}
-            className="text-emerald-700"
+            className="text-slate-700 hover:text-emerald-600 transition"
           >
             How it works
           </NavLink>
-          <NavLink to="/dashboard" className="text-emerald-700">
+          <NavLink to="/dashboard" className="text-slate-700 hover:text-emerald-600 transition">
             Counselor dashboard
           </NavLink>
-          <NavLink to="/login" className="text-emerald-700">
+          <NavLink to="/login" className="text-slate-700 hover:text-emerald-600 transition">
             Login
           </NavLink>
         </div>
-        <Link
-          to="/login"
-          className="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white"
-        >
-          Talk to an expert
-        </Link>
+
+        <div className="flex items-center gap-2.5">
+          <Link
+            to="/login"
+            className="hidden sm:inline-flex rounded-full bg-ink px-4 py-2 text-xs sm:text-sm font-semibold text-white transition hover:bg-emerald-900"
+          >
+            Talk to an expert
+          </Link>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((v: boolean) => !v)}
+            className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-700 md:hidden hover:bg-slate-200"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="absolute left-0 right-0 top-full z-50 flex flex-col gap-3 border-b border-slate-200 bg-white p-5 shadow-2xl md:hidden animate-in slide-in-from-top-2">
+            <NavLink
+              to={{ pathname: "/", hash: "colleges" }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              Find colleges
+            </NavLink>
+            <NavLink
+              to={{ pathname: "/", hash: "courses" }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              Courses
+            </NavLink>
+            <NavLink
+              to={{ pathname: "/", hash: "how" }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              How it works
+            </NavLink>
+            <NavLink
+              to="/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              Counselor dashboard
+            </NavLink>
+            <NavLink
+              to="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              Login
+            </NavLink>
+            <Link
+              to="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="mt-2 text-center rounded-xl bg-ink py-3 text-sm font-extrabold text-white"
+            >
+              Talk to an expert
+            </Link>
+          </div>
+        )}
       </nav>
 
       <HeroSection
@@ -413,17 +474,16 @@ export default function HomePage() {
       {/* Feedback form */}
       <section
         id="feedback"
-        className="border-t border-slate-100 bg-[#f8faf7] py-16"
+        className="border-t border-slate-100 bg-[#f8faf7] py-10 sm:py-16"
       >
-        <div className="mx-auto max-w-3xl px-6">
-          {/* <p className="eyebrow">Share your experience</p> */}
-          <h2 className="section-title">Tell us how nexteduwise helped you</h2>
-          <p className="mt-3 max-w-xl text-sm text-slate-600">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+          <h2 className="section-title text-xl sm:text-3xl font-extrabold text-ink">Tell us how nexteduwise helped you</h2>
+          <p className="mt-2 sm:mt-3 max-w-xl text-xs sm:text-sm text-slate-600">
             Your feedback helps fellow students make informed college decisions.
           </p>
           <form
             onSubmit={submitFeedback}
-            className="mt-8 rounded-3xl border border-emerald-100 bg-white p-7 shadow-xl shadow-emerald-950/5"
+            className="mt-6 sm:mt-8 rounded-2xl sm:rounded-3xl border border-emerald-100 bg-white p-5 sm:p-7 shadow-lg shadow-emerald-950/5"
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-xs font-bold text-slate-700">
@@ -432,7 +492,7 @@ export default function HomePage() {
                   name="name"
                   required
                   placeholder="Enter your name"
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs sm:text-sm text-ink outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
                 />
               </label>
               <div>
@@ -467,12 +527,12 @@ export default function HomePage() {
                 required
                 rows={3}
                 placeholder="Share how nexteduwise helped your search..."
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs sm:text-sm text-ink outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
               />
             </label>
             <button
               type="submit"
-              className="mt-5 w-full rounded-xl bg-ink py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              className="mt-5 w-full rounded-xl bg-ink py-3 text-xs sm:text-sm font-bold text-white transition active:scale-[0.98] hover:bg-emerald-900"
             >
               {feedbackSent ? "Thanks for your review!" : "Submit feedback"}
             </button>

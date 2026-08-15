@@ -334,59 +334,60 @@ export function CourseCategories({
   const categories = Object.entries(coursesByCategory);
   const visibleCategories = showAll ? categories : categories.slice(0, 6);
 
-  return (
-    <section id="courses" className="mx-auto max-w-7xl px-6 py-16">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">Explore by category</p>
+ 
 
-          <h2 className="section-title">
+  return (
+    <section id="courses" className="mx-auto max-w-7xl px-3.5 sm:px-6 py-8 sm:py-16">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end sm:gap-4">
+        <div>
+          <p className="eyebrow text-xs font-bold uppercase tracking-wider text-emerald-700">Explore by category</p>
+          <h2 className="section-title text-xl font-extrabold text-ink sm:text-3xl">
             Find the right path for your future
           </h2>
-
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+          <p className="mt-2 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-600">
             Explore courses, colleges and career paths across major fields of
             study. Compare your options and find the education path that fits
             your goals.
           </p>
         </div>
       </div>
-      {/* this section shows the categorywise courses */}
-      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {visibleCategories.map(([category, courses]) => {
+
+      {/* Categorywise courses grid */}
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+        {visibleCategories.map(([category, courses]: [string, any[]]) => {
           const display = CATEGORY_DISPLAY[category] ?? DEFAULT_DISPLAY;
           const expanded = showAllCourses[category];
           const visibleCourses = expanded ? courses : courses.slice(0, 4);
+
           return (
             <article
               key={category}
-               
-              className={`group relative cursor-pointer overflow-hidden rounded-3xl border border-slate-100 bg-gradient-to-br ${display.color} p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/5`}
+              className={`group relative cursor-pointer overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-100 bg-gradient-to-br ${display.color} p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/5`}
             >
               <div className="flex items-start justify-between">
-                <span className="text-3xl">{display.icon}</span>
+                <span className="text-2xl sm:text-3xl">{display.icon}</span>
 
                 {display.count && (
-                  <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-slate-700">
+                  <span className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-xs">
                     {display.count}
                   </span>
                 )}
               </div>
 
-              <h3 className={`mt-5 text-xl font-extrabold ${display.text}`}>
+              <h3 className={`mt-3 sm:mt-5 text-base sm:text-xl font-extrabold ${display.text}`}>
                 {category}
               </h3>
 
-              <p className="mt-2 min-h-[42px] text-sm leading-6 text-slate-600">
+              <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:mt-2 sm:text-sm min-h-[32px] sm:min-h-[42px]">
                 {display.tagline}
               </p>
 
-              <div className="mt-5">
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <div className="mt-3 sm:mt-5">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:text-[11px]">
                   Popular programs
                 </p>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {visibleCourses.map((course, idx) => (
                     <button
                       key={`${course.name}-${idx}`}
@@ -394,14 +395,14 @@ export function CourseCategories({
                         e.stopPropagation();
                         onSelect(course.name);
                       }}
-                      className="flex w-full items-center justify-between rounded-xl border border-white/70 bg-white/60 px-3 py-2 text-left transition hover:bg-white"
+                      className="flex w-full items-center justify-between rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-left transition hover:bg-white active:scale-[0.99]"
                     >
-                      <span className="text-xs font-semibold leading-5 text-slate-700">
+                      <span className="truncate text-xs font-semibold leading-5 text-slate-800">
                         {course.name}
                       </span>
 
                       {course.shortForm && (
-                        <span className="ml-3 shrink-0 rounded-md bg-slate-100 px-2 py-1 text-[10px] font-extrabold text-slate-600">
+                        <span className="ml-2 shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-600 sm:ml-3 sm:px-2 sm:py-1">
                           {course.shortForm}
                         </span>
                       )}
@@ -409,14 +410,14 @@ export function CourseCategories({
                   ))}
                 </div>
 
-                {/* MORE PROGRAMS → EXPLORE OPTIONS */}
+                {/* More programs toggle */}
                 {courses.length > 4 && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleExpandCourseView(category);
                     }}
-                    className="mt-3 text-xs font-bold text-emerald-700 hover:text-emerald-800"
+                    className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-800 sm:mt-3"
                   >
                     {expanded
                       ? "Show less"
@@ -425,25 +426,24 @@ export function CourseCategories({
                 )}
               </div>
 
-              <div className="mt-5 border-t border-white/60 pt-4">
-                <p className="text-xs leading-5 text-slate-600">
+              <div className="mt-4 border-t border-white/60 pt-3 sm:mt-5 sm:pt-4">
+                <p className="text-xs leading-snug text-slate-600">
                   {display.counselling}
                 </p>
 
-                {/* EXPLORE OPTIONS → EXPLORE */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onExplore(category);
                   }}
-                  className="mt-3 flex w-full items-center justify-between"
+                  className="mt-2.5 flex w-full items-center justify-between sm:mt-3"
                 >
-                  <span className="text-sm font-extrabold text-emerald-700">
+                  <span className="text-xs font-extrabold text-emerald-700 sm:text-sm">
                     Explore Colleges
                   </span>
 
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 transition group-hover:bg-emerald-600 group-hover:text-white">
-                    <ArrowUpRight size={16} />
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 transition group-hover:bg-emerald-600 group-hover:text-white sm:h-8 sm:w-8 shadow-xs">
+                    <ArrowUpRight size={15} />
                   </span>
                 </button>
               </div>
@@ -453,17 +453,17 @@ export function CourseCategories({
       </div>
 
       {categories.length > 6 && (
-        <div className="mt-10 flex justify-center">
+        <div className="mt-8 flex justify-center sm:mt-10">
           <button
-            onClick={() => setShowAll((prev) => !prev)}
-            className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+            onClick={() => setShowAll((prev: boolean) => !prev)}
+            className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 sm:px-6 sm:py-3 sm:text-sm"
           >
             {showAll ? "Show less" : "View all categories"}
 
             {showAll ? (
-              <ChevronUp size={18} />
+              <ChevronUp size={16} />
             ) : (
-              <ChevronDown size={18} />
+              <ChevronDown size={16} />
             )}
           </button>
         </div>

@@ -40,59 +40,75 @@ export function HeroSection({
     return () => window.clearInterval(id);
   }, [slides.length]);
 
+
   return (
-    <section id="top" className="relative overflow-hidden bg-ink">
-      {/* Crossfading slideshow */}
-      <div className="absolute inset-0">
-        {slides.map((slide, index) => (
-          <img
-            key={index}
-            src={slide.image}
-            alt={slide.name ?? "University  nexteduwise"}
-            loading={index === 0 ? "eager" : "lazy"}
-            className={`slide ${active % slides.length === index ? "is-active" : ""}`}
-          />
-        ))}
+  <section id="top" className="relative overflow-hidden bg-ink">
+    {/* Crossfading slideshow */}
+    <div className="absolute inset-0">
+      {slides.map((slide, index) => (
+        <img
+          key={index}
+          src={slide.image}
+          alt={slide.name ?? "University nexteduwise"}
+          loading={index === 0 ? "eager" : "lazy"}
+          className={`slide ${
+            active % slides.length === index ? "is-active" : ""
+          } h-full w-full object-cover object-center`}
+        />
+      ))}
+    </div>
+
+    {/* Dark overlay — helps text stay readable on mobile */}
+    <div className="absolute inset-0 bg-black/35" />
+
+    {/* Featured college badge */}
+    {current?.name && (
+      <div className="absolute top-3 right-3 z-10 max-w-[160px] rounded-xl border border-white/20 bg-black/50 px-2.5 py-1.5 text-right backdrop-blur-md sm:bottom-6 sm:top-auto sm:right-6 sm:max-w-[260px] sm:rounded-2xl sm:px-4 sm:py-2.5">
+        <p className="text-[8px] font-bold uppercase tracking-[.14em] text-lime sm:text-[10px] sm:tracking-[.16em]">
+          Featured college
+        </p>
+
+        <p className="truncate text-[10px] font-extrabold text-white sm:text-sm">
+          {current.name}
+        </p>
       </div>
+    )}
 
-      {/* College name for the current background image — bottom-right corner */}
-      {current?.name && (
-        <div className="absolute bottom-4 right-4 z-10 rounded-2xl border border-white/20 bg-black/45 px-4 py-2.5 text-right backdrop-blur-sm sm:bottom-6 sm:right-6">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-lime">
-            Featured college
-          </p>
-          <p className="max-w-[240px] truncate text-sm font-extrabold text-white sm:text-base">
-            {current.name}
-          </p>
-        </div>
-      )}
-
-      <div className="relative mx-auto flex w-full flex-col items-center justify-between pb-24 pt-16 text-center sm:pt-24">
-      {/* Eyebrow pill  */}
-        <div className="float-pill inline-flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[.18em] text-lime backdrop-blur-sm">
-          <Sparkles size={14} />
+    {/* Hero content */}
+    <div className="relative z-10 mx-auto flex w-full flex-col items-center px-4 pb-12 pt-8 text-center sm:px-6 sm:pb-24 sm:pt-20">
+      {/* Eyebrow pill */}
+      <div className="float-pill inline-flex max-w-full items-center justify-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-lime backdrop-blur-md sm:gap-2 sm:px-4 sm:text-xs sm:tracking-[.18em]">
+        <Sparkles size={13} className="shrink-0 text-lime" />
+        <span className="text-center">
           Verified Colleges · 1:1 Guidance · Zero-Cost Counseling
-        </div>
-
-        {/* Headline   */}
-        <div className="mt-6 max-w-3xl">
-          <h1 className="text-center text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl">
-            Your path to the right college,{" "}
-            <em className="font-serif font-normal text-lime">made simpler.</em>
-          </h1>
-          <p className="mt-6 text-center text-xl font-semibold text-white/95 sm:text-2xl">
-            <span className="text-white/70">nexteduwise helps you </span>
-            <span className="text-lime">{text}</span>
-            <span className="typewriter-caret" aria-hidden="true" />
-          </p>
-          <p className="text-center mt-4 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-            Search trusted colleges, compare fees &amp; cutoffs, and get a counselor who
-            understands your goals — all in one place.
-          </p>
-        </div>
-
-        <div className="mt-14" />
+        </span>
       </div>
-    </section>
-  );
+
+      {/* Headline */}
+      <div className="mt-4 w-full max-w-3xl sm:mt-6">
+        <h1 className="text-center text-2xl font-extrabold leading-snug tracking-tight text-white sm:text-5xl lg:text-6xl">
+          Your path to the right college,{" "}
+          <em className="font-serif font-normal text-lime">
+            made simpler.
+          </em>
+        </h1>
+
+        {/* Typewriter */}
+        <p className="mt-3 flex flex-wrap items-center justify-center text-center text-sm font-semibold text-white/95 sm:mt-6 sm:text-2xl min-h-[32px]">
+          <span className="text-white/80">nexteduwise helps you&nbsp;</span>
+          <span className="text-lime font-extrabold">{text}</span>
+          <span className="typewriter-caret ml-0.5" aria-hidden="true" />
+        </p>
+
+        {/* Description */}
+        <p className="mx-auto mt-3 max-w-[340px] text-center text-xs leading-relaxed text-white/80 sm:mt-4 sm:max-w-2xl sm:text-lg sm:leading-7">
+          Search trusted colleges, compare fees &amp; cutoffs, and get a
+          counselor who understands your goals — all in one place.
+        </p>
+      </div>
+
+      <div className="mt-4 sm:mt-10" />
+    </div>
+  </section>
+);
 }
