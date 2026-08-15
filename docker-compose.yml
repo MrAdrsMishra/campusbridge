@@ -11,8 +11,8 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+      context: apps/api
+      dockerfile: Dockerfile
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/nexteduwise}
       PORT: 3000
@@ -20,6 +20,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SETUP_KEY: ${SETUP_KEY}
       SECRET_KEY: ${SECRET_KEY:-nexteduwise-admin-secret}
+      BROWSER_USER_AGENT: ${BROWSER_USER_AGENT:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/colleges', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]

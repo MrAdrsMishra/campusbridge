@@ -278,7 +278,7 @@ const TOP_REVIEWS_LIMIT = 5;
 // The User-Agent can be overridden via the BROWSER_USER_AGENT
 // environment variable for debugging or if it stops working.
 const BROWSER_USER_AGENT =
-  process.env.BROWSER_USER_AGENT ??
+  process.env.BROWSER_USER_AGENT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
