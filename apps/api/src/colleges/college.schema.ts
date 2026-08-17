@@ -5,11 +5,9 @@ export type CollegeDocument = HydratedDocument<College>;
 export class College {
   @Prop({ required: true }) name!: string;
   @Prop({ required: true }) city!: string;
-  @Prop({ required: true }) state!: string;
-  @Prop({ required: true }) about!: string;
-  @Prop({ type: [String], required: true }) courses!: string[];
-  @Prop({ type: [{ name: String, rating: Number, comment: String }], default: [] }) reviews!: { name: string; rating: number; comment: string }[];
-  @Prop() image?: string;
-  @Prop() averageFees?: number;
+  @Prop() url?: string;
+  @Prop() seriesId?: number;
+  @Prop() shiksha_instituteId?: number;
 }
 export const CollegeSchema = SchemaFactory.createForClass(College);
+

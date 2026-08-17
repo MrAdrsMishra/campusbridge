@@ -18,7 +18,6 @@ export class AuthService {
   ) {}
   async login(dto: LoginDto) {
     const secretKey = process.env.SECRET_KEY?.trim();
-
     if (!secretKey) {
       throw new UnauthorizedException("Admin secret is not configured.");
     }
@@ -29,7 +28,7 @@ export class AuthService {
 
     return this.session({
       id: "admin",
-      name: "Admin",
+      name: "Vishnu Mishra",
       email: "admin@nexteduwise.local",
       role: "admin",
     });

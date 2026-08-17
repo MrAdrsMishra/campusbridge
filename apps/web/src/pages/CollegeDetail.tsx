@@ -74,10 +74,17 @@ const CollegeDetail = () => {
         });
         response = await request(`/colleges/details?${params.toString()}`);
       } else if (targetCollege.name) {
-        // Resolve by name → find the exact College360 url → fetch details by that url.
-        response = await request(
-          `/colleges/details?name=${encodeURIComponent(targetCollege.name)}`,
-        );
+        // Resolve by name + city -> find canonical College360 url via DB/Fuse.js strategy -> fetch details.
+        const params = new URLSearchParams({ name: targetCollege.name });
+        const city =
+          targetCollege.city ||
+          useHomeStore.getState().filters.city ||
+          undefined;
+        if (city) params.set("city", city);
+        if (targetCollege.instituteId) {
+          params.set("shikshaInstituteId", String(targetCollege.instituteId));
+        }
+        response = await request(`/colleges/details?${params.toString()}`);
       } else {
         throw new Error("No way to resolve this college.");
       }
@@ -221,8 +228,7 @@ const CollegeDetail = () => {
         </h2>
 
         <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
-          We couldn't load the college details right now. This may be a
-          temporary issue. Please try again.
+          OOps!! We are still gathering details of this college. Belive US.
         </p>
       </div>
 

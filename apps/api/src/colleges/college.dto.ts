@@ -29,12 +29,22 @@ export class CollegeScrapeQueryDto {
   @IsPositive()
   seriesId?: number;
 
-  // Alternative lookup — pass the college name and the service will first resolve
-  // its exact College360 url (slug + seriesId), then load the full details from it.
+  // Alternative lookup — pass the college name and optional city/shikshaInstituteId,
+  // and the service will resolve its canonical College360 url (slug + seriesId).
   @IsOptional()
   @IsString()
   @Length(1, 200)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  city?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  shikshaInstituteId?: number;
 }
 
 // src/colleges/dto/shiksha-search-query.dto.ts
@@ -43,6 +53,11 @@ export class ShikshaSearchQueryDto {
   @IsNotEmpty()
   @Length(1, 150)
   query!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  city?: string;
 }
 
 // src/colleges/dto/shiksha-college-list-query.dto.ts
@@ -51,6 +66,11 @@ export class ShikshaCollegeListQueryDto {
   @IsNotEmpty()
   @Length(1, 500)
   url!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  city?: string;
 }
 // src/colleges/pipes/parse-object-id.pipe.ts
 

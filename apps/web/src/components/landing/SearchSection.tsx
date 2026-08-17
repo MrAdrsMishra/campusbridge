@@ -70,6 +70,7 @@ function Dropdown({
 export function SearchSection({ filters, onFilterChange, onSearch, onPickCity, citySuggestions, loading }: Props) {
   const [showCollegeSuggestions, setShowCollegeSuggestions] = useState(false);
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const [cityError, setCityError] = useState(false);
 
   const collegeMatches = useMemo(() => {
     const query = filters.name.trim().toLowerCase();
@@ -94,6 +95,8 @@ export function SearchSection({ filters, onFilterChange, onSearch, onPickCity, c
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          // A course-only search can't run without a city — flag it in the UI.
+          setCityError(Boolean(filters.course) && !filters.city.trim());
           onSearch();
         }}
         className="mt-5 sm:mt-8 rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-white p-3.5 sm:p-5 shadow-lg shadow-emerald-950/5"
@@ -156,20 +159,35 @@ export function SearchSection({ filters, onFilterChange, onSearch, onPickCity, c
 
           {/* City with Mapbox suggestions */}
           <div className="relative w-full">
-            <label className="flex h-11 sm:h-12 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 text-slate-400 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+            <label className={`flex h-11 sm:h-12 items-center gap-2 rounded-2xl border px-3.5 text-slate-400 focus-within:ring-2 ${
+              cityError
+                ? "border-amber-400 bg-amber-50/40 focus-within:border-amber-400 focus-within:ring-amber-100"
+                : "border-slate-200 bg-white focus-within:border-emerald-500 focus-within:ring-emerald-100"
+            }`}>
               <MapPin size={17} className="shrink-0 text-emerald-600" />
               <input
                 value={filters.city}
                 onChange={(e) => {
                   onFilterChange("city", e.target.value);
+                  setCityError(false);
                   setShowCitySuggestions(Boolean(e.target.value.trim()));
                 }}
                 onFocus={() => setShowCitySuggestions(Boolean(filters.city.trim()))}
                 onBlur={() => window.setTimeout(() => setShowCitySuggestions(false), 150)}
-                placeholder="City (e.g. Pune)"
+                placeholder={filters.course ? "City (required for course search)" : "City (e.g. Pune)"}
                 className="w-full bg-transparent text-xs sm:text-sm font-semibold text-ink outline-none placeholder:text-slate-400"
               />
+              {filters.course && !cityError && (
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                  Required
+                </span>
+              )}
             </label>
+            {cityError && (
+              <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                No city selected — showing a default city. Pick one to personalize your results.
+              </p>
+            )}
             {showCitySuggestions && citySuggestions.length > 0 && (
               <div className="absolute left-0 right-0 z-40 mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
                 <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">

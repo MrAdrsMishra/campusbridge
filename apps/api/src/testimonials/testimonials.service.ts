@@ -17,9 +17,14 @@ const SEED_TESTIMONIALS = [
   { name: "Kabir Singh", review: "From shortlisting to counselling, everything was handled smoothly. Grateful for the support!", rating: 5 },
 ];
 
+const CACHE_TTL_MS = 5 * 60 * 1_000; // 5 minutes
+
 @Injectable()
 export class TestimonialsService implements OnModuleInit {
   private readonly logger = new Logger(TestimonialsService.name);
+
+  private cache: TestimonialDocument[] | null = null;
+  private cacheExpiresAt = 0;
 
   constructor(
     @InjectModel(Testimonial.name)
@@ -35,11 +40,24 @@ export class TestimonialsService implements OnModuleInit {
     );
   }
 
-  create(body: { name: string; review: string; rating: number }) {
-    return this.testimonials.create(body);
+  async create(body: { name: string; review: string; rating: number }) {
+    const doc = await this.testimonials.create(body);
+    // Prepend to cache so the next GET is still instant.
+    if (this.cache) {
+      this.cache = [doc, ...this.cache].slice(0, 6);
+      this.cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+    }
+    return doc;
   }
 
-  findAll() {
-    return this.testimonials.find().sort({ createdAt: -1 }).limit(6).lean();
+  async findAll(): Promise<TestimonialDocument[]> {
+    if (this.cache && Date.now() < this.cacheExpiresAt) {
+      return this.cache;
+    }
+    const docs = await this.testimonials.find().sort({ createdAt: -1 }).limit(6).lean() as unknown as TestimonialDocument[];
+    this.cache = docs;
+    this.cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+    return docs;
   }
 }
+

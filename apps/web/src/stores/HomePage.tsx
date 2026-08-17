@@ -13,14 +13,23 @@ import { useHomeStore } from "./homeStore";
 import { useLocationPopupStore } from "./locationPopupStore";
 import { HeroSection } from "../components/landing/HeroSection";
 import { SearchSection } from "../components/landing/SearchSection";
-import { TopCollegesTable } from "../components/landing/TopCollegesTable";
-import {
+ import {
   CATEGORY_SEARCH_MAP,
   CourseCategories,
 } from "../components/landing/CourseCategories";
 import { HowItWorks } from "../components/landing/HowItWorks";
 import { LeadCapture } from "../components/landing/LeadCapture";
 import { Testimonials } from "../components/landing/Testimonials";
+import { CollegesListTable } from "../components/landing/CollegesListTable";
+
+// Fallbacks for the initial load, used only until the user explicitly picks a
+// course/city. Kept small (5 each) and randomly chosen so every fresh visit
+// shows something useful without asking for a location.
+const FALLBACK_COURSES = ["Engineering", "MBA", "Medical", "B.Sc", "Arts"];
+const FALLBACK_CITIES = ["Bhopal", "Indore", "Delhi", "Mumbai", "Pune"];
+
+const pickRandom = <T,>(list: T[]): T =>
+  list[Math.floor(Math.random() * list.length)];
 
 export default function HomePage() {
   const {
@@ -100,10 +109,8 @@ export default function HomePage() {
     }
   };
 
-  // === College list session cache ===
-  // Keep the last successful results so refresh / back-navigation don't refetch
-  // unnecessarily. The cache is replaced on every new search.
   const SUGGESTIONS_CACHE_KEY = "nexteduwise_colleges_cache";
+  const TESTIMONIALS_CACHE_KEY = "nexteduwise_testimonials";
 
   const readCachedSuggestions = (): CollegeListItem[] | null => {
     try {
@@ -122,6 +129,23 @@ export default function HomePage() {
     } catch {}
   };
 
+  const readCachedTestimonials = (): Testimonial[] | null => {
+    try {
+      const raw = sessionStorage.getItem(TESTIMONIALS_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Testimonial[];
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const cacheTestimonials = (list: Testimonial[]) => {
+    try {
+      sessionStorage.setItem(TESTIMONIALS_CACHE_KEY, JSON.stringify(list));
+    } catch {}
+  };
+
   const search = async (overrides?: Partial<Filters>) => {
     const effective = { ...filters, ...overrides };
     try {
@@ -137,12 +161,20 @@ export default function HomePage() {
       );
     } catch {}
 
-    // Shiksha → College360 flow. Default/initial load is Engineering colleges
-    // for the user's saved location (falling back to Bhopal when none is set).
-    const course = effective.course?.trim() || "Engineering";
+    // Shiksha → College360 flow. Always keep a fallback for course & city so the
+    // page loads fine before the user explicitly picks them; once a specific
+    // value is provided it wins. No location popup is triggered from here.
+    const name = effective.name?.trim() || "";
+    const course = effective.course?.trim() || pickRandom(FALLBACK_COURSES);
     const preferred = readPreferredLocation();
-    const city = effective.city?.trim() || preferred.city || "bhopal";
-    const keyword = effective.name?.trim() || course;
+    const city = (
+      effective.city?.trim() ||
+      preferred.city ||
+      pickRandom(FALLBACK_CITIES)
+    ).trim();
+
+    const keyword = name || course;
+    const cityQuery = `&city=${encodeURIComponent(city)}`;
 
     setLoadingSuggestions(true);
     setSelectedCollege(null);
@@ -150,21 +182,29 @@ export default function HomePage() {
 
     try {
       const searchResponse = await request(
-        `/colleges/search?query=${encodeURIComponent(keyword)}`,
+        `/colleges/search?query=${encodeURIComponent(keyword)}${cityQuery}`,
       );
-      console.log(searchResponse.body)
       if (!searchResponse.ok)
         throw new Error(`Shiksha search failed (${searchResponse.status})`);
-      const category = (await searchResponse.json()) as ShikshaCategoryResult;
-      const categoryUrl = toShikshaCityUrl(category.url || "", city);
+      const result = (await searchResponse.json()) as
+        | ShikshaCategoryResult
+        | CollegeListItem[];
 
-      const listResponse = await request(
-        `/colleges?url=${encodeURIComponent(categoryUrl)}`,
-      );
-      if (!listResponse.ok)
-        throw new Error(`College list failed (${listResponse.status})`);
-      const list = (await listResponse.json()) as CollegeListItem[];
-      const next = Array.isArray(list) ? list : [];
+      // College-name search → backend already resolved the institutes.
+      let next: CollegeListItem[];
+      if (Array.isArray(result)) {
+        next = result;
+      } else {
+        // Course/category search → fetch the category college list as before.
+        const categoryUrl = toShikshaCityUrl(result.url || "", city);
+        const listResponse = await request(
+          `/colleges?url=${encodeURIComponent(categoryUrl)}${cityQuery}`,
+        );
+        if (!listResponse.ok)
+          throw new Error(`College list failed (${listResponse.status})`);
+        const list = (await listResponse.json()) as CollegeListItem[];
+        next = Array.isArray(list) ? list : [];
+      }
       setSuggestions(next);
       cacheSuggestions(next);
     } catch {
@@ -216,6 +256,11 @@ export default function HomePage() {
 
   // Load testimonials
   useEffect(() => {
+    const cached = readCachedTestimonials();
+    if (cached && cached.length > 0) {
+      setTestimonials(cached);
+      return;
+    }
     void request("/testimonials")
       .then((response) => {
         if (!response.ok) {
@@ -223,7 +268,11 @@ export default function HomePage() {
         }
         return response.json();
       })
-      .then((data) => setTestimonials(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setTestimonials(list);
+        cacheTestimonials(list);
+      })
       .catch((err) => {
         console.error("Failed to load testimonials", err);
         setTestimonials([]);
@@ -292,16 +341,26 @@ export default function HomePage() {
       setRating(5);
       const data = await response.json();
       prependTestimonial(data as Testimonial);
+      cacheTestimonials([data as Testimonial, ...testimonials].slice(0, 6));
     }
   };
 
   const openCollege = (college: CollegeListItem) => {
-    // Resolve by name → exact College360 url → fetch details by that url.
-    // The backend's getCollegeDetailsByName handles the resolution internally.
+    // Always use the freshest snapshot from the suggestions store — the background
+    // pre-computation mutates the same list objects in-place, so by click-time
+    // slug/seriesId are usually already populated.
+    const fresh =
+      useHomeStore.getState().suggestions.find(
+        (s) =>
+          (college.instituteId != null && s.instituteId === college.instituteId) ||
+          (college.slug && s.slug === college.slug) ||
+          s.name === college.name,
+      ) ?? college;
+
     setSelectedCollege(null);
-    setSelectedSuggestion(college);
-    const targetId = String(college.instituteId ?? college.slug ?? college.name ?? "");
-    navigate(`/college-detail/${targetId}`, { state: { college } });
+    setSelectedSuggestion(fresh);
+    const targetId = String(fresh.instituteId ?? fresh.slug ?? fresh.name ?? "");
+    navigate(`/college-detail/${targetId}`, { state: { college: fresh } });
   };
   const onExplore = (category: string) => {
     const query = CATEGORY_SEARCH_MAP[category] ?? category;
@@ -310,9 +369,8 @@ export default function HomePage() {
   const applyCategory = (category: string) => {
     updateFilterAndActivity("course", category);
     const preferred = readPreferredLocation();
-    if (!preferred.city) {
-      // No preferred location saved yet — ask the user to pick one first.
-      // Colleges are loaded only once we know where they want to study.
+    if (!preferred.city && !filters.city.trim()) {
+      // Ask for the user's location first so the category search is city-specific.
       openLocationPopup();
       return;
     }
@@ -457,7 +515,7 @@ export default function HomePage() {
         loading={loadingSuggestions}
       />
 
-      <TopCollegesTable
+      <CollegesListTable
         colleges={suggestions}
         loading={loadingSuggestions}
         activeCategory={filters.course || "Engineering"}

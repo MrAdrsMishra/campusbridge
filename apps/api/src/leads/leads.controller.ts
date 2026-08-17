@@ -38,7 +38,7 @@ export class LeadsController {
   contactInfo() {
     return {
       phone: process.env.COUNSELOR_CONTACT_PHONE ?? "+919039220551",
-      email: process.env.COUNSELOR_CONTACT_EMAIL ?? "vishnu.mishra0179@gmail.com",
+      email: process.env.COUNSELOR_CONTACT_EMAIL ?? "nexteduwiseconsultancy@gmail.com",
     };
   }
 }

@@ -46,7 +46,7 @@ function feeLabel(c: CollegeListItem, fallback: string): string {
     : `${formatMoney(c.minFees)}–${formatMoney(c.maxFees)}`;
 }
 
-export function TopCollegesTable({ colleges, loading, activeCategory, onOpenCollege }: Props) {
+export function CollegesListTable({ colleges, loading, activeCategory, onOpenCollege }: Props) {
   const [toast, setToast] = useState<string | null>(null);
 
   const ranked = useMemo(() => {

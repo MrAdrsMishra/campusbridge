@@ -1,4 +1,5 @@
 // src/colleges/colleges.service.ts
+
 import {
   BadGatewayException,
   BadRequestException,
@@ -8,6 +9,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
+import Fuse from "fuse.js";
 import { Model } from "mongoose";
 import { College, CollegeDocument } from "./college.schema";
 
@@ -100,6 +102,12 @@ export type CollegeListItem = {
   headerImage: string | null;
   minFees: number | null;
   maxFees: number | null;
+  // Populated by the College360 detail resolution; null for Shiksha-sourced items.
+  slug: string | null;
+  seriesId: number | null;
+  // City for this college, always stored on every search type (category list and
+  // institute name search). Used for canonical College360 name resolution later.
+  city: string | null;
 };
 
 // ============================================================
@@ -206,6 +214,36 @@ type ShikshaSolrResult = {
   name: string;
   type?: string | null;
   url?: string | null;
+  id?: number | string;
+  instituteId?: number | string;
+  
+};
+
+type ShikshaFeeTuple = {
+  minFees?: number | null;
+  maxFees?: number | null;
+};
+
+/** Shiksha getInstituteData response — only the fields we map into a CollegeListItem. */
+type ShikshaInstituteResponse = {
+  status?: string | number;
+  data?: {
+    listingId?: number | string;
+    listingName?: string;
+    instituteTopCardData?: {
+      instituteName?: string;
+      logoImageUrl?: string | null;
+      headerImageDesktop?: string | null;
+      headerImageDesktopView?: string | null;
+      headerImageDesktopNew?: string | null;
+      headerImageMobile?: string | null;
+      headerImageMobileView?: string | null;
+      headerImageMobileNew?: string | null;
+    };
+    compareRecommendedTuples?:
+      | Record<string, ShikshaFeeTuple[]>
+      | ShikshaFeeTuple[];
+  };
 };
 
 type ShikshaCategoryResponse = {
@@ -242,15 +280,30 @@ const COLLEGE_DETAIL_ENDPOINT = (slug: string, seriesId: number) =>
 const COLLEGE360_SEARCH_ENDPOINT = (name: string) =>
   `${COLLEGE360_API_BASE}/client/college/search/?search=${encodeURIComponent(name)}`;
 
+const COLLEGE360_READ_CITY_ENDPOINT = (city: string) =>
+  `${COLLEGE360_API_BASE}/client/read-city?city=${encodeURIComponent(city)}`;
+
+const COLLEGE360_FIND_CITY_COLLEGES_ENDPOINT = (cityId: string, page = 1, limit = 100) =>
+  `${COLLEGE360_API_BASE}/client/find-city-colleges?id=${encodeURIComponent(cityId)}&page=${page}&limit=${limit}`;
+
 // Shiksha auto-suggest (pattern from the autosuggestorApi reference) and category page APIs.
 const SHIKSHA_API_BASE = "https://apis.shiksha.com/apigateway";
 const SHIKSHA_AUTOSUGGEST_ENDPOINT = `${SHIKSHA_API_BASE}/autosuggestorApi/v1/info/getAutosuggestorResults`;
 // getCategoryPageFull (not getCategoryPageFullData) is the live category endpoint; data = base64({ url }).
 const SHIKSHA_CATEGORY_ENDPOINT = `${SHIKSHA_API_BASE}/categorypageapi/v4/info/getCategoryPageFull`;
 
+// College-name search flow — direct institute detail API.
+// data = base64({ instituteId, url, datesFilterData:{ bc:[] }, isBot:false }).
+const SHIKSHA_INSTITUTE_ENDPOINT = `${SHIKSHA_API_BASE}/instituteapi/v5/info/getInstituteData`;
+
 const FETCH_TIMEOUT_MS = 8_000;
 const FETCH_MAX_RETRIES = 2;
 const FETCH_RETRY_BASE_DELAY_MS = 800;
+// find-city-colleges in the hot resolveCanonicalCollege path: moderate page + timeout.
+const CITY_COLLEGES_PAGE_SIZE = 50;
+const CITY_COLLEGES_FETCH_TIMEOUT_MS = 20_000;
+// Background bulk-cache fetch: larger timeout because it's fire-and-forget.
+const BACKGROUND_FETCH_TIMEOUT_MS = 30_000;
 const SUGGESTION_CACHE_TTL_MS = 10 * 60 * 1000;
 const DETAIL_CACHE_TTL_MS = 60 * 60 * 1000;
 const SHIKSHA_CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -317,6 +370,11 @@ export class CollegesService implements OnModuleInit {
     string,
     CacheEntry<CollegeListItem[]>
   >();
+  // Shiksha institute detail responses, keyed by the Shiksha instituteId.
+  private readonly shikshaInstituteCache = new Map<
+    string,
+    CacheEntry<CollegeListItem | null>
+  >();
   // College360 name resolution results, keyed by normalized college name.
   private readonly college360SearchCache = new Map<
     string,
@@ -329,43 +387,65 @@ export class CollegesService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    if (await this.colleges.countDocuments()) return;
-    // await this.colleges.insertMany(seedData);
+    // Seed only when the collection is completely empty.
+    if ((await this.colleges.countDocuments()) === 0) {
+      // await this.colleges.insertMany(seedData);
+    }
+    // Bring existing documents in line with the current schema (new defaulted
+    // fields, plus indexes for the resolution/search lookups).
+    await this.runSchemaMigration();
   }
 
-  // ---- internal DB (your own colleges collection) ----
-
-  findAll(query: CollegeSearchQuery & { page?: number; limit?: number }) {
-    const filter: Record<string, unknown> = {};
-
-    if (query.course) {
-      filter.courses = {
-        $regex: this.escapeRegExp(query.course),
-        $options: "i",
-      };
-    }
-    for (const field of ["state", "city", "name"] as const) {
-      const value = query[field];
-      if (value) {
-        filter[field] = { $regex: this.escapeRegExp(value), $options: "i" };
+  /**
+   * Idempotent schema backfill. Mongoose only applies `default` values to NEW
+   * documents, so rows created before the schema gained these fields won't have
+   * them. This updates every pre-existing document that's missing a field, so the
+   * collection reflects the current College schema. Safe to run on every startup.
+   */
+  private async runSchemaMigration(): Promise<void> {
+    const updateMissingField = async (
+      field: string,
+      value: unknown,
+    ): Promise<void> => {
+      const result = await this.colleges.updateMany(
+        { [field]: { $exists: false } },
+        { $set: { [field]: value } },
+      );
+      if (result.modifiedCount > 0) {
+        this.logger.log(
+          `[colleges:migration] Backfilled "${field}" on ${result.modifiedCount} document(s).`,
+        );
       }
+    };
+
+    // New defaulted fields on the College schema.
+    await updateMissingField("state", "");
+    await updateMissingField("about", "");
+    await updateMissingField("courses", []);
+    await updateMissingField("reviews", []);
+
+    // Canonical-resolution fields — expose as null until populated.
+    await updateMissingField("url", null);
+    await updateMissingField("seriesId", null);
+    await updateMissingField("shiksha_instituteId", null);
+
+    // Indexes used by the canonical resolution & search flows.
+    try {
+      await Promise.all([
+        this.colleges.collection.createIndex({ city: 1 }),
+        this.colleges.collection.createIndex({ name: 1 }),
+        this.colleges.collection.createIndex({ shiksha_instituteId: 1 }),
+        this.colleges.collection.createIndex({ url: 1 }),
+      ]);
+      this.logger.log("[colleges:migration] College indexes are in place.");
+    } catch (error) {
+      this.logger.warn(
+        `[colleges:migration] Failed to create indexes: ${(error as Error).message}`,
+      );
     }
-
-    const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 50);
-    const page = Math.max(Number(query.page) || 1, 1);
-
-    return this.colleges
-      .find(filter)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
   }
 
-  findOne(id: string) {
-    return this.colleges.findById(id).lean();
-  }
 
-  // ---- college360 search (step 1: pick a college) ----
 
   /**
    * Search priority: college name if provided, else city. At least one is required —
@@ -408,12 +488,16 @@ export class CollegesService implements OnModuleInit {
   // ============================================================
 
   /**
-   * Step 1 — Shiksha auto-suggest.
-   * Calls the Shiksha autosuggestor endpoint with a base64-encoded JSON payload
-   * ({ domain, experiment, keyword }) and returns the relevant category entry so the
-   * frontend can pass its `url` to the college-list endpoint.
+   * Step 1 — Shiksha search, two modes:
+   *   - college name  → every `results.type === "institute"` hit is resolved via
+   *     getInstituteData and returned as the final CollegeListItem[].
+   *   - course/category → returns the single { name, url } category entry so the
+   *     frontend can pass its `url` to the college-list endpoint.
    */
-  async searchShiksha(query: string): Promise<ShikshaCategoryResult> {
+  async searchShiksha(
+    query: string,
+    city?: string,
+  ): Promise<ShikshaCategoryResult | CollegeListItem[]> {
     const keyword = query.trim();
     if (!keyword) {
       throw new BadRequestException("A search query is required.");
@@ -423,6 +507,7 @@ export class CollegesService implements OnModuleInit {
     const url = `${SHIKSHA_AUTOSUGGEST_ENDPOINT}?data=${encodeURIComponent(
       Buffer.from(JSON.stringify(payload)).toString("base64"),
     )}`;
+  
     const raw = await this.fetchJson<ShikshaAutosuggestResponse>(url);
     if (!raw || raw.status !== "success" || !raw.data?.solrResults?.length) {
       throw new BadGatewayException(
@@ -431,10 +516,18 @@ export class CollegesService implements OnModuleInit {
     }
 
     const results = raw.data.solrResults;
+
+    // College-name search: Shiksha leads with an exact `institute` hit. When that
+    // happens, resolve every institute directly via getInstituteData into the final
+    // CollegeListItem[] — no category-url hop needed.
+    const institutes = results.filter((r) => r.type === "institute" && r.url);
+
+    if (results[0]?.type === "institute" && institutes.length > 0) {
+      return this.getCollegesByInstituteNames(institutes, city);
+    }
     const relevant =
       results.find((r) => r.type === "stream" && r.url) ??
       results.find((r) => r.url && this.isShikshaCategoryUrl(r.url));
-
     if (!relevant?.url) {
       throw new NotFoundException(
         `No matching category found for "${keyword}".`,
@@ -450,8 +543,12 @@ export class CollegesService implements OnModuleInit {
    * name is resolved to a College360 slug + seriesId with controlled concurrency. Unmatched
    * colleges are returned with null slug/seriesId instead of failing the whole request.
    */
-  async getCollegesFromShiksha(url: string): Promise<CollegeListItem[]> {
+  async getCollegesFromShiksha(
+    url: string,
+    city?: string,
+  ): Promise<CollegeListItem[]> {
     const categoryUrl = this.normalizeShikshaCategoryUrl(url);
+    const resolvedCity = this.resolveCategoryCity(categoryUrl, city);
 
     const cached = this.getCached(this.shikshaCategoryCache, categoryUrl);
 
@@ -480,8 +577,12 @@ export class CollegesService implements OnModuleInit {
       headerImage: this.formatAssetUrl(tuple.instituteHeaderImageUrl),
       minFees: tuple.minFees ?? null,
       maxFees: tuple.maxFees ?? null,
+      slug: null,
+      seriesId: null,
+      city: resolvedCity,
     }));
 
+    // Cache the raw list immediately so the response is returned without waiting.
     this.setCached(
       this.shikshaCategoryCache,
       categoryUrl,
@@ -489,8 +590,514 @@ export class CollegesService implements OnModuleInit {
       SHIKSHA_CATEGORY_CACHE_TTL_MS,
     );
 
+    // Fire-and-forget: pre-compute canonical slug/seriesId in the background.
+    // Once resolved, we mutate the cached list items in-place so the next
+    // request for the same URL gets fully enriched results from cache.
+    if (resolvedCity) {
+      void this.preComputeCanonicals(list, resolvedCity, categoryUrl);
+    }
+
     return list;
   }
+
+  /**
+   * Background pre-computation: caches city colleges in DB, then resolves
+   * canonical slug + seriesId for every item. Mutates the list in-place so the
+   * shared in-memory cache is updated without a re-fetch.
+   */
+  private async preComputeCanonicals(
+    list: CollegeListItem[],
+    city: string,
+    categoryUrl: string,
+  ): Promise<void> {
+    try {
+      await this.ensureCityCollegesInDb(city);
+
+      const CONCURRENCY = 4;
+      for (let i = 0; i < list.length; i += CONCURRENCY) {
+        const batch = list.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          batch.map(async (item) => {
+            if (!item.name || (item.slug && item.seriesId)) return;
+            try {
+              const canonical = await this.resolveCanonicalCollege(
+                item.name,
+                city,
+                item.instituteId ?? undefined,
+              );
+              item.slug = canonical.slug;
+              item.seriesId = canonical.seriesId;
+            } catch {
+              // Unresolvable college — leave null, will retry on next cache miss
+            }
+          }),
+        );
+      }
+
+      this.logger.debug(
+        `[preComputeCanonicals] Finished background resolution for ${categoryUrl} (${list.filter((i) => i.slug).length}/${list.length} resolved)`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `[preComputeCanonicals] Background pre-compute failed for ${categoryUrl}: ${String(err)}`,
+      );
+    }
+  }
+  /**
+   * College-name search (Step 1 alternative).
+   * Shiksha autosuggest led with `type:"institute"` hits, so each one is fetched via
+   * getInstituteData and mapped into a final CollegeListItem[] here. View-details
+   * from CollegesListTable keeps working unchanged — every item still carries a
+   * resolvable college `name` (slug/seriesId stay null, so the name path is used).
+   */
+  private async getCollegesByInstituteNames(
+    institutes: ShikshaSolrResult[],
+    city?: string,
+  ): Promise<CollegeListItem[]> {
+    const seen = new Set<string>();
+    const unique = institutes
+      .filter((result) => {
+        const key = String(
+          this.instituteIdFromResult(result) ?? result.url ?? result.name,
+        );
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, MAX_SUGGESTIONS);
+
+    const items: (CollegeListItem | null)[] = [];
+
+    for (let i = 0; i < unique.length; i += COURSE_FILTER_CONCURRENCY) {
+      const batch = unique.slice(i, i + COURSE_FILTER_CONCURRENCY);
+      const resolved = await Promise.all(
+        batch.map((result) => this.fetchShikshaInstituteItem(result, city)),
+      );
+      items.push(...resolved);
+    }
+
+    return items.filter((item): item is CollegeListItem => Boolean(item));
+  }
+
+  /** Map getInstituteData into the shared CollegeListItem shape. */
+  private mapShikshaInstituteItem(
+    solr: ShikshaSolrResult,
+    data: NonNullable<ShikshaInstituteResponse["data"]>,
+    city?: string | null,
+  ): CollegeListItem {
+    const card = data.instituteTopCardData;
+    const fee = this.findFirstShikshaFeeTuple(data);
+    const rawId = data.listingId ?? this.instituteIdFromResult(solr);
+    const idNumber = Number(rawId);
+
+    return {
+      instituteId: Number.isFinite(idNumber) ? idNumber : null,
+      name:
+        data.listingName?.trim() ||
+        card?.instituteName?.trim() ||
+        solr.name.trim(),
+      logo: this.formatAssetUrl(card?.logoImageUrl),
+      headerImage: this.formatAssetUrl(
+        card?.headerImageDesktopNew ??
+          card?.headerImageDesktopView ??
+          card?.headerImageDesktop ??
+          card?.headerImageMobileNew ??
+          card?.headerImageMobileView ??
+          card?.headerImageMobile,
+      ),
+      minFees: fee?.minFees ?? null,
+      maxFees: fee?.maxFees ?? null,
+      slug: null,
+      seriesId: null,
+      city: city?.trim() || null,
+    };
+  }
+
+  /**
+   * Fees live under compareRecommendedTuples keyed by course bucket
+   * (e.g. `"10"`); pick that bucket's first tuple, else the first bucket.
+   */
+  private findFirstShikshaFeeTuple(
+    data: ShikshaInstituteResponse["data"],
+  ): ShikshaFeeTuple | null {
+    const tuples = data?.compareRecommendedTuples;
+    if (Array.isArray(tuples)) return tuples[0] ?? null;
+
+    if (tuples && typeof tuples === "object") {
+      const keys = Object.keys(tuples);
+      const preferred = keys.includes("10") ? "10" : keys[0];
+      const bucket = preferred ? tuples[preferred] : undefined;
+      return Array.isArray(bucket) ? bucket[0] ?? null : null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Numeric Shiksha instituteId from a solr result: `id`/`instituteId` field,
+   * else trailing digits in the url (e.g. /university/ies-university-bhopal-146121).
+   */
+  private instituteIdFromResult(result: ShikshaSolrResult): number | null {
+    const raw = result.instituteId ?? result.id;
+    const parsed =
+      typeof raw === "number" ? raw : Number.parseInt(String(raw ?? ""), 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+    const match = result.url?.match(/(\d+)\/?$/);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  /** Fetch + cache a single Shiksha institute via getInstituteData. */
+  private async fetchShikshaInstituteItem(
+    solr: ShikshaSolrResult,
+    city?: string,
+  ): Promise<CollegeListItem | null> {
+    const instituteId = this.instituteIdFromResult(solr);
+    const instituteUrl = this.normalizeShikshaCategoryUrl(solr.url ?? "");
+    if (!instituteId || !instituteUrl) return null;
+
+    const resolvedCity = city?.trim() || null;
+    const cacheKey = `${instituteId}:${resolvedCity ?? ""}`;
+    const cached = this.getCached(this.shikshaInstituteCache, cacheKey);
+    if (cached) return cached;
+
+    const payload = {
+      instituteId,
+      url: instituteUrl,
+      datesFilterData: { bc: [] },
+      isBot: false,
+    };
+
+    const requestUrl =
+      `${SHIKSHA_INSTITUTE_ENDPOINT}?data=${encodeURIComponent(
+        Buffer.from(JSON.stringify(payload)).toString("base64"),
+      )}`;
+
+    const raw = await this.fetchJson<ShikshaInstituteResponse>(requestUrl);
+    if (!raw?.data) return null;
+
+    const item = this.mapShikshaInstituteItem(solr, raw.data, resolvedCity);
+    if (!item.name) return null;
+
+    this.setCached(
+      this.shikshaInstituteCache,
+      cacheKey,
+      item,
+      SHIKSHA_CATEGORY_CACHE_TTL_MS,
+    );
+    return item;
+  }
+
+  /**
+   * Strategy for finding canonical names in College360 with Shiksha college name & city:
+   * 1. Check DB for colleges in the city:
+   *    - try to match shiksha_instituteId.
+   *    - if not available/matched, use hybrid matching (exact -> token overlap &
+   *      acronym -> Fuse.js) against the DB colleges for this city.
+   *    - when matched update shiksha_instituteId in DB and return { slug, seriesId }.
+   * 2. If the college isn't matched from the DB (empty/partial/stale city snapshot),
+   *    fall through to College360:
+   *    - hit read-city endpoint to get cityId, find all colleges in that city, then
+   *      hybrid-match the name. Store ALL those colleges in the DB.
+   * 3. If the city list still can't match (e.g. the college isn't in the first page),
+   *    fall back to a direct College360 name search via resolveCollegeOnCollege360.
+   * 4. Only throw "Not able to load" (NotFoundException) if every strategy failed.
+   */
+  async resolveCanonicalCollege(
+    shikshaCollegeName: string,
+    city: string,
+    shikshaInstituteId?: number,
+  ): Promise<{ slug: string; seriesId: number }> {
+    const nameTrimmed = shikshaCollegeName.trim();
+    const cityTrimmed = city.trim();
+
+    if (!nameTrimmed || !cityTrimmed) {
+      throw new BadRequestException(
+        "Both college name and city are required for canonical resolution.",
+      );
+    }
+
+    // 1. Check DB for colleges in city if city exists
+    const collegesInCity = await this.colleges
+      .find({
+        city: { $regex: new RegExp(`^${this.escapeRegExp(cityTrimmed)}$`, "i") },
+      })
+      .lean();
+
+    if (collegesInCity.length > 0) {
+      // Stage 1a: Try to match shiksha_instituteId if provided
+      if (shikshaInstituteId) {
+        const matchedById = collegesInCity.find(
+          (c) => c.shiksha_instituteId === shikshaInstituteId,
+        );
+        if (matchedById?.url && matchedById?.seriesId) {
+          return { slug: matchedById.url, seriesId: matchedById.seriesId };
+        }
+      }
+
+      // Stage 1b: Use hybrid matching (exact -> token overlap & acronym -> Fuse.js)
+      const matchedDoc = this.findBestCollegeMatch(nameTrimmed, collegesInCity);
+
+      if (matchedDoc) {
+        if (matchedDoc.url && matchedDoc.seriesId) {
+          // Update instituteId for this matched college in DB if missing or updated
+          if (
+            shikshaInstituteId &&
+            matchedDoc.shiksha_instituteId !== shikshaInstituteId
+          ) {
+            await this.colleges.updateOne(
+              { _id: matchedDoc._id },
+              { $set: { shiksha_instituteId: shikshaInstituteId } },
+            );
+          }
+          return { slug: matchedDoc.url, seriesId: matchedDoc.seriesId };
+        }
+      }
+
+      // City may exist in DB but the college still wasn't matched (or its entry
+      // has no url/seriesId yet). Fall through to the College360 flow below so a
+      // stale/partial city snapshot doesn't turn into a dead-end 404.
+    }
+
+    // 2. Best-effort College360 city flow. read-city / find-city-colleges can be
+    //    slow or time out — a failure here must NOT fail the whole request, so we
+    //    fall through to the direct name search in step 3.
+    type CityResponse = {
+      status: number;
+      data?: Array<{ _id: string; city: string }>;
+    };
+    const cityData = await this.fetchJson<CityResponse>(
+      COLLEGE360_READ_CITY_ENDPOINT(cityTrimmed),
+    );
+
+    const cityCandidates = cityData?.data;
+    const matchedCity =
+      cityCandidates && cityCandidates.length > 0
+        ? cityCandidates.find(
+            (c) => c.city.toLowerCase() === cityTrimmed.toLowerCase(),
+          ) ?? cityCandidates[0]
+        : undefined;
+
+    if (matchedCity?._id) {
+      // Keep the page small + a shorter timeout so this block responds quickly;
+      // anything missed here is covered by step 3.
+      type CityCollegesResponse =
+        | College360SearchResult[]
+        | { status?: number; data?: College360SearchResult[] };
+
+      const rawCityColleges = await this.fetchJson<CityCollegesResponse>(
+        COLLEGE360_FIND_CITY_COLLEGES_ENDPOINT(
+          matchedCity._id,
+          1,
+          CITY_COLLEGES_PAGE_SIZE,
+        ),
+        CITY_COLLEGES_FETCH_TIMEOUT_MS,
+      );
+
+      const cityCollegesList: College360SearchResult[] = Array.isArray(
+        rawCityColleges,
+      )
+        ? rawCityColleges
+        : rawCityColleges && Array.isArray(rawCityColleges.data)
+          ? rawCityColleges.data
+          : [];
+
+      if (cityCollegesList.length > 0) {
+        // Use hybrid matching (exact -> token overlap & acronym -> Fuse.js)
+        const matchedCollege = this.findBestCollegeMatch(
+          nameTrimmed,
+          cityCollegesList,
+        );
+
+        // Store all these colleges within the city into DB
+        const bulkOps = cityCollegesList.map((item) => {
+          const isMatched =
+            matchedCollege &&
+            (item.url === matchedCollege.url ||
+              item.name === matchedCollege.name);
+          const instId =
+            isMatched && shikshaInstituteId
+              ? shikshaInstituteId
+              : undefined;
+
+          return {
+            updateOne: {
+              filter: { name: item.name, city: matchedCity.city },
+              update: {
+                $set: {
+                  name: item.name,
+                  city: matchedCity.city,
+                  url: item.url,
+                  seriesId: item.seriesId,
+                  shiksha_instituteId: instId,
+                },
+              },
+              upsert: true,
+            },
+          };
+        });
+
+        if (bulkOps.length > 0) {
+          await this.colleges.bulkWrite(bulkOps);
+        }
+
+        if (matchedCollege?.url && matchedCollege?.seriesId) {
+          return { slug: matchedCollege.url, seriesId: matchedCollege.seriesId };
+        }
+      }
+    }
+
+    // 3. Last resort: direct College360 name search. This covers colleges that
+    //    didn't surface in the (paginated) city list — the name search queries
+    //    College360 directly with several name variants and hybrid matching.
+    const direct = await this.resolveCollegeOnCollege360(nameTrimmed);
+    if (direct.slug && direct.seriesId !== null) {
+      return { slug: direct.slug, seriesId: direct.seriesId };
+    }
+
+    throw new NotFoundException("Not able to load");
+  }
+
+  /**
+   * Pre-fetches all colleges for a city from College360 if not already cached in MongoDB,
+   * bulk-upserting them into DB for instant in-memory matching.
+   */
+  private async ensureCityCollegesInDb(city: string): Promise<void> {
+    const cityTrimmed = city.trim();
+    if (!cityTrimmed) return;
+
+    const count = await this.colleges.countDocuments({
+      city: { $regex: new RegExp(`^${this.escapeRegExp(cityTrimmed)}$`, "i") },
+    });
+
+    if (count > 0) return; // Already cached in MongoDB!
+
+    type CityResponse = {
+      status: number;
+      data?: Array<{ _id: string; city: string }>;
+    };
+    const cityData = await this.fetchJson<CityResponse>(
+      COLLEGE360_READ_CITY_ENDPOINT(cityTrimmed),
+    );
+
+    if (!cityData || !Array.isArray(cityData.data) || cityData.data.length === 0) {
+      return;
+    }
+
+    const matchedCity =
+      cityData.data.find(
+        (c) => c.city.toLowerCase() === cityTrimmed.toLowerCase(),
+      ) ?? cityData.data[0];
+
+    if (!matchedCity?._id) return;
+
+    type CityCollegesResponse =
+      | College360SearchResult[]
+      | { status?: number; data?: College360SearchResult[] };
+
+    const rawCityColleges = await this.fetchJson<CityCollegesResponse>(
+      COLLEGE360_FIND_CITY_COLLEGES_ENDPOINT(matchedCity._id, 1, 100),
+      BACKGROUND_FETCH_TIMEOUT_MS,
+    );
+
+    const cityCollegesList: College360SearchResult[] = Array.isArray(
+      rawCityColleges,
+    )
+      ? rawCityColleges
+      : rawCityColleges && Array.isArray(rawCityColleges.data)
+        ? rawCityColleges.data
+        : [];
+
+    if (!cityCollegesList.length) return;
+
+    const bulkOps = cityCollegesList.map((item) => ({
+      updateOne: {
+        filter: { name: item.name, city: matchedCity.city },
+        update: {
+          $set: {
+            name: item.name,
+            city: matchedCity.city,
+            url: item.url,
+            seriesId: item.seriesId,
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    await this.colleges.bulkWrite(bulkOps);
+  }
+
+  /**
+   * Hybrid matcher:
+   * 1. Exact normalized match.
+   * 2. Token overlap ratio + acronym bonus (e.g., query "SAGE University, Bhopal" vs "Sanjeev Agrawal Global Educational University [SAGE] Bhopal").
+   * 3. Fuse.js fallback with relaxed threshold.
+   */
+  private findBestCollegeMatch<
+    T extends { name: string; url?: string; seriesId?: number },
+  >(queryName: string, candidates: T[]): T | null {
+    if (!candidates.length) return null;
+
+    const normQuery = this.normalizeCollegeName(queryName);
+
+    // 1. Exact normalized name match
+    const exact = candidates.find(
+      (c) => this.normalizeCollegeName(c.name) === normQuery,
+    );
+    if (exact) return exact;
+
+    // 2. Token Overlap & Acronym Score
+    const qTokens = normQuery.split(" ").filter((t) => t.length > 1);
+    if (qTokens.length > 0) {
+      let bestCandidate: T | null = null;
+      let maxScore = 0;
+
+      for (const candidate of candidates) {
+        const normCand = this.normalizeCollegeName(candidate.name);
+        const cTokens = normCand.split(" ").filter((t) => t.length > 1);
+        if (!cTokens.length) continue;
+
+        const cSet = new Set(cTokens);
+        const overlaps = qTokens.filter((t) => cSet.has(t)).length;
+        const tokenOverlapScore = overlaps / qTokens.length;
+
+        // Check acronym match (e.g. "SAGE" in query matching [SAGE] in candidate)
+        const matches = candidate.name.match(
+          /\[([A-Za-z0-9]+)\]|\(([A-Za-z0-9]+)\)/g,
+        );
+        const acronyms = matches
+          ? matches.map((m) => m.replace(/[[\]()]/g, "").toLowerCase())
+          : [];
+
+        let acronymBonus = 0;
+        for (const qToken of qTokens) {
+          if (acronyms.includes(qToken)) {
+            acronymBonus = 0.3;
+            break;
+          }
+        }
+
+        const totalScore = tokenOverlapScore + acronymBonus;
+        if (totalScore > maxScore && totalScore >= 0.7) {
+          maxScore = totalScore;
+          bestCandidate = candidate;
+        }
+      }
+
+      if (bestCandidate) return bestCandidate;
+    }
+
+    // 3. Fuse.js fallback with relaxed threshold
+    const fuse = new Fuse(candidates, {
+      keys: ["name"],
+      threshold: 0.5,
+      ignoreLocation: true,
+    });
+    const fuseResults = fuse.search(queryName);
+    return fuseResults.length > 0 ? fuseResults[0].item : null;
+  }
+
   async getCollegeDetailsByName(
     name: string,
   ): Promise<CollegeDetailView | null> {
@@ -590,49 +1197,18 @@ export class CollegesService implements OnModuleInit {
     // Tier 2 — normalized exact-name match
     // ==========================================================
 
-    const exact = candidates.filter(
-      (candidate) => this.normalizeCollegeName(candidate.name) === key,
-    );
+    const bestMatch = this.findBestCollegeMatch(name, candidates);
 
-    if (exact.length > 0) {
-      if (exact.length > 1) {
-        this.logger.debug(
-          `Ambiguous exact College360 match for "${name}" — using first.`,
-        );
-      }
-
+    if (bestMatch?.url && bestMatch.seriesId != null) {
       resolved = {
-        slug: exact[0].url,
-        seriesId: exact[0].seriesId,
+        slug: bestMatch.url,
+        seriesId: bestMatch.seriesId,
       };
+      this.logger.debug(
+        `College360 match for "${name}" -> "${bestMatch.name}"`,
+      );
     } else {
-      // ========================================================
-      // Tier 3 — fuzzy token-overlap match
-      // ========================================================
-
-      const scored = candidates
-        .map((candidate) => ({
-          result: candidate,
-          score: this.collegeNameSimilarity(
-            key,
-            this.normalizeCollegeName(candidate.name),
-          ),
-        }))
-        .sort((a, b) => b.score - a.score);
-
-      if (scored.length > 0 && scored[0].score >= COLLEGE360_MATCH_THRESHOLD) {
-        resolved = {
-          slug: scored[0].result.url,
-          seriesId: scored[0].result.seriesId,
-        };
-
-        this.logger.debug(
-          `Fuzzy College360 match for "${name}" -> "${scored[0].result.name}" ` +
-            `(score ${scored[0].score.toFixed(2)}).`,
-        );
-      } else {
-        this.logger.debug(`No confident College360 match for "${name}".`);
-      }
+      this.logger.debug(`No confident College360 match for "${name}".`);
     }
 
     this.setCached(
@@ -702,6 +1278,22 @@ export class CollegesService implements OnModuleInit {
 
       if (segment) {
         queries.add(segment);
+        const words = segment.split(/\s+/).filter((w) => w.length > 2);
+        const nonGeneric = words.filter(
+          (w) =>
+            ![
+              "university",
+              "college",
+              "institute",
+              "technology",
+              "management",
+              "science",
+              "engineering",
+            ].includes(w.toLowerCase()),
+        );
+        if (nonGeneric.length > 0) {
+          queries.add(nonGeneric[0]);
+        }
       }
     }
 
@@ -758,15 +1350,32 @@ export class CollegesService implements OnModuleInit {
     return /\/colleges\/colleges-/.test(url);
   }
 
-  // ---- college360 detail (step 2: user picked one) ----
-
-  /** Full detail payload — courses with branches, all reviews mapped, etc. */
-  async scrape(
-    slug: string,
-    seriesId: number,
-  ): Promise<ScrapedCollegeResult | null> {
-    return this.fetchDetail(slug, seriesId);
+  /** City slug embedded in a Shiksha category URL, e.g. "colleges-bhopal" -> "Bhopal". */
+  private cityFromShikshaCategoryUrl(url: string): string | null {
+    const marker = "colleges-";
+    const idx = url.lastIndexOf(marker);
+    if (idx < 0) return null;
+    const raw = url
+      .slice(idx + marker.length)
+      .split(/[/?#]/)[0]
+      .trim();
+    if (!raw || /^(india|national|all)$/i.test(raw)) return null;
+    return raw
+      .split("-")
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase() + word.slice(1))
+      .join(" ");
   }
+
+  /** Prefer the explicitly-passed city; fall back to the one in the category URL. */
+  private resolveCategoryCity(
+    categoryUrl: string,
+    explicitCity?: string,
+  ): string | null {
+    return explicitCity?.trim() || this.cityFromShikshaCategoryUrl(categoryUrl);
+  }
+
+  // ---- college360 detail (step 2: user picked one) ----
 
   /** Trimmed view for the college detail screen: name, short desc, logo, bg image, address, courses by category, top reviews. */
   async getCollegeDetailView(
@@ -793,47 +1402,6 @@ export class CollegesService implements OnModuleInit {
       ),
       reviews: scraped.reviews,
     };
-  }
-
-  /** Persists a scraped result into your own `colleges` collection. */
-  async scrapeAndSave(slug: string, seriesId: number) {
-    const scraped = await this.fetchDetail(slug, seriesId);
-    if (!scraped) return null;
-
-    // Flatten "category — course name" to fit the schema's plain string[] `courses`.
-    // Branches are intentionally dropped here to avoid bloating a single string field;
-    // they remain available via scrape()/getCollegeDetailView() for anyone who needs them.
-    const flattenedCourses = scraped.courses.map(
-      (c) => `${c.category} — ${c.name}`,
-    );
-
-    // Your schema requires `name` on each review; college360 has no reviewer name field,
-    // so a placeholder is used here only for the persisted copy — the live detail view
-    // (getCollegeDetailView) intentionally omits this fabricated field.
-    const reviewsForSchema = scraped.reviews.map((r) => ({
-      name: "College360 Student",
-      rating: r.rating,
-      comment: r.comment,
-    }));
-
-    return this.colleges
-      .findOneAndUpdate(
-        { name: scraped.name },
-        {
-          $set: {
-            name: scraped.name,
-            city: scraped.city ?? "",
-            state: scraped.state ?? "",
-            about: scraped.about ?? "",
-            courses: flattenedCourses,
-            reviews: reviewsForSchema,
-            image: scraped.image ?? undefined,
-            averageFees: scraped.averageFees ?? undefined,
-          },
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      )
-      .lean();
   }
 
   // ============================================================
@@ -1039,10 +1607,13 @@ export class CollegesService implements OnModuleInit {
   // Generic fetch/cache helpers
   // ============================================================
 
-  private async fetchJson<T>(url: string): Promise<T | null> {
+  private async fetchJson<T>(
+    url: string,
+    timeoutMs: number = FETCH_TIMEOUT_MS,
+  ): Promise<T | null> {
     for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         const response = await fetch(url, {

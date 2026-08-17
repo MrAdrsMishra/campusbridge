@@ -83,6 +83,7 @@ export function LeadCapture({ sent, onSubmit }: Props) {
               <Field name="course" label="Preferred Course" required />
             </div>
             <Field name="city" label="Target City" required />
+            <Field name="budget" label="Your Budget"  />
 
             <button
               type="submit"

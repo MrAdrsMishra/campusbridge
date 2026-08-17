@@ -58,7 +58,7 @@ const PREFERRED_LOCATION_KEY = "nexteduwise_preferred_location";
 
 const USER_ACTIVITY_KEY = "nexteduwise_user_activity";
 
-const POPUP_DELAY = 50_000;
+const POPUP_DELAY = 70_000;
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 
@@ -198,7 +198,7 @@ export function DesiredLocationPopup() {
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ------------------------------------------------------------------------ */
-  /*                    Open popup after 50 seconds                           */
+  /*                    Open popup after 70 seconds                           */
   /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -217,7 +217,7 @@ export function DesiredLocationPopup() {
     const timeoutId = window.setTimeout(() => {
       /*
        * Check one more time in case another component
-       * changed sessionStorage during these 50 seconds.
+       * changed sessionStorage during these 70 seconds.
        */
       if (sessionStorage.getItem(LOCATION_POPUP_SHOWN_KEY) === "true") {
         return;

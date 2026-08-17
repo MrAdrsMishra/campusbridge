@@ -23,7 +23,7 @@ export type ShikshaCategoryResult = {
   url: string;
 };
 
-/** A college discovered via Shiksha and resolved against College360 (GET /colleges?url=). */
+/** A college discovered via Shiksha (GET /colleges?url= or /colleges/search). */
 export type CollegeListItem = {
   instituteId: number | null;
   name: string;
@@ -33,6 +33,9 @@ export type CollegeListItem = {
   maxFees: number | null;
   slug: string | null;
   seriesId: number | null;
+  // Always returned by the backend for every search type; used for canonical
+  // College360 name resolution (name + city strategy).
+  city?: string | null;
 };
 
 export type CollegeSearchResponse = {
@@ -73,22 +76,49 @@ export type Testimonial = {
   rating: number;
 };
 
-export type Lead = {
+export interface SearchActivity {
+  course?: string;
+  city?: string;
+  state?: string;
+  name?: string;
+  searchedAt?: string;
+}
+
+export interface Lead {
   _id: string;
+
   name: string;
   phone: string;
   email?: string;
+
   course: string;
   city: string;
   budget?: string;
-  status: string;
+
+  status: 
+    | "new"
+    | "contacted"
+    | "follow-up"
+    | "interested"
+    | "documents"
+    | "meeting"
+    | "admitted";
+
   counselor?: string;
+  counselorId?: string;
+
   notes?: string;
-  contacted?: "pending" | "yes" | "no";
-  interest?: "pending" | "ready" | "unclear";
+
+  contacted: "pending" | "yes" | "no";
+
+  interest: "pending" | "ready" | "unclear";
+
   response?: string;
+
+  searchActivity?: string;
+
   createdAt: string;
-};
+}
 
 export type Filters = {
   course: string;
