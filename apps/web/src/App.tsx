@@ -18,6 +18,8 @@ function DashboardRoute() {
   return <DashboardPage />;
 }
 
+const isAdminSession = () => Boolean(localStorage.getItem("nexteduwise.accessToken"));
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -33,8 +35,8 @@ export default function App() {
           </Routes>
         </div>
         <Footer />
-        <DesiredLocationPopup/>
-        <CounselorPopup />
+        {!isAdminSession() && <DesiredLocationPopup/>}
+        {!isAdminSession() && <CounselorPopup />}
       </div>
     </BrowserRouter>
   );

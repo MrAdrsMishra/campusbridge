@@ -6,6 +6,10 @@ import { useCounselorPopupStore } from "../stores/counselorPopupStore";
 export function CounselorPopup() {
   const MAX_DISMISSALS = 3;
 
+  if (typeof window !== "undefined" && localStorage.getItem("nexteduwise.accessToken")) {
+    return null;
+  }
+
   const { isOpen, collegeName, close: closePopup } = useCounselorPopupStore();
   const [submitted, setSubmitted] = useState(() => {
     return localStorage.getItem("nexteduwise_lead_submitted") === "true";

@@ -184,6 +184,10 @@ export function DesiredLocationPopup() {
     close: closePopup,
   } = useLocationPopupStore();
 
+  if (typeof window !== "undefined" && localStorage.getItem("nexteduwise.accessToken")) {
+    return null;
+  }
+
   const [search, setSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null);
 
