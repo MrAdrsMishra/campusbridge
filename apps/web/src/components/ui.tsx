@@ -1,15 +1,42 @@
+import { useApiStore } from "../stores/apiStore";
+
 export const CDN_BASE_URL = "https://dfhe5ze0n4pxu.cloudfront.net";
+
+/** Hosts served by Shiksha's hotlink-protected S3 bucket (block 403 direct loads). */
+const SHIKSHA_HOST_RE = /(^|\.)shiksha\.com$/i;
+
+/**
+ * Rewrite a hotlink-protected Shiksha image to our backend proxy, which fetches it with
+ * the browser-like Referer/User-Agent headers Shiksha's S3 bucket requires. All other
+ * hosts (e.g. the college360 CloudFront CDN, Unsplash) pass through untouched.
+ */
+export function imageProxyUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (SHIKSHA_HOST_RE.test(parsed.hostname)) {
+      const apiBase = useApiStore.getState().url("/colleges/image");
+      const sep = apiBase.includes("?") ? "&" : "?";
+      return `${apiBase}${sep}url=${encodeURIComponent(parsed.href)}`;
+    }
+  } catch {
+    /* fall through to the raw URL */
+  }
+  return url;
+}
 
 export function formatImageUrl(path?: string | null): string | null {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) {
     if (path.includes("college360.co.in/")) {
-      return path.replace("https://college360.co.in/", `${CDN_BASE_URL}/`).replace("http://college360.co.in/", `${CDN_BASE_URL}/`);
+      path = path
+        .replace("https://college360.co.in/", `${CDN_BASE_URL}/`)
+        .replace("http://college360.co.in/", `${CDN_BASE_URL}/`);
     }
-    return path;
+    return imageProxyUrl(path);
   }
   const cleanPath = path.replace(/^\/+/, "");
-  return `${CDN_BASE_URL}/${cleanPath}`;
+  return imageProxyUrl(`${CDN_BASE_URL}/${cleanPath}`);
 }
 
 /**
@@ -19,9 +46,9 @@ export function formatImageUrl(path?: string | null): string | null {
  * URLs without a size token are returned unchanged.
  */
 export function fullImageUrl(path?: string | null): string | null {
-  const formatted = formatImageUrl(path);
-  if (!formatted) return null;
-  return formatted.replace(/_\d+x\d+(?=\.[A-Za-z0-9]+(?:\?[^/]*)?$)/, "");
+  if (!path) return null;
+  const full = path.replace(/_\d+x\d+(?=\.[A-Za-z0-9]+(?:\?[^/]*)?$)/, "");
+  return formatImageUrl(full);
 }
 
 export function SearchBox({

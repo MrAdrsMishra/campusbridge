@@ -303,22 +303,32 @@ const DEFAULT_DISPLAY = {
  
 export const CATEGORY_SEARCH_MAP: Record<string, string> = {
   "Engineering & Technology": "Engineering",
+  "Engineering and Technology": "Engineering",
   "Management & Business": "Management",
+  "Management and Business": "Management",
+  "Management and Business Administration": "Management",
   "Medical & Healthcare": "Medical",
+  "Medical and Healthcare": "Medical",
   "Computer Applications & IT": "Computer Applications",
+  "IT and Computer Applications": "Computer Applications",
   "Science": "Science",
   "Commerce & Finance": "Commerce",
+  "Commerce": "Commerce",
   "Law & Legal Studies": "Law",
   "Architecture & Planning": "Architecture",
+  "Architecture and Planning Course": "Architecture",
   "Design & Fine Arts": "Design",
+  "Design and Fine Arts": "Design",
   "Arts, Humanities & Social Sciences": "Arts",
   "Pharmacy": "Pharmacy",
   "Paramedical & Allied Health": "Paramedical",
   "Education & Teaching": "Education",
   "Hotel Management & Hospitality": "Hotel Management",
   "Doctoral & Research": "PhD",
+  "Doctoral / Research Programs": "PhD",
   "Vocational & Skill-Based": "Vocational",
 };
+
 
 export function CourseCategories({
   onSelect,

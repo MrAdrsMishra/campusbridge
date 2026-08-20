@@ -1,8 +1,5 @@
 export const HERO_SLIDES = [
-  "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1523580494863-6f3031224c94?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&w=1920&q=80",
+  
 ];
 
 export const TYPED_PHRASES = [
@@ -13,7 +10,10 @@ export const TYPED_PHRASES = [
   "Track Application Deadlines",
 ];
 
-export const coursesByCategory: Record<string, { name: string; shortForm: string | null }[]> = {
+export const coursesByCategory: Record<
+  string,
+  { name: string; shortForm: string | null }[]
+> = {
   "Engineering and Technology": [
     {
       name: "Bachelor of Technology",
@@ -118,7 +118,7 @@ export const coursesByCategory: Record<string, { name: string; shortForm: string
       shortForm: "MBA - Business Analytics",
     },
   ],
-  "Science": [
+  Science: [
     {
       name: "B.Sc. Biotechnology",
       shortForm: "B.Sc.  - Biotech",
@@ -170,7 +170,7 @@ export const coursesByCategory: Record<string, { name: string; shortForm: string
       shortForm: "BCA",
     },
   ],
-  "Commerce": [
+  Commerce: [
     {
       name: "Bachelor of Commerce",
       shortForm: "B.Com",
@@ -320,12 +320,21 @@ export let SEARCH_STATES = [
 export const SEARCH_CATEGORIES = [
   "All Categories",
   "Engineering",
-  "MBA",
-  "Vocational",
+  "Management",
   "Medical",
-  "B.Sc",
+  "Computer Applications",
+  "Science",
+  "Commerce",
+  "Law",
+  "Architecture",
+  "Design",
   "Arts",
-  "Diploma",
+  "Pharmacy",
+  "Paramedical",
+  "Education",
+  "Hotel Management",
+  "PhD",
+  "Vocational",
 ];
 
 export type RankingCollege = {
@@ -355,8 +364,8 @@ export function enrichCollege(id: string, name: string): RankingCollege {
     rating: 4 + Math.round(((hash % 10) + 5) * 100) / 100,
     reviewsCount: 25 + (hash % 420),
     exams: [exams[hash % 4], exams[(hash + 1) % 4]],
-    fee: `₹${(hash % 150 + 30) * 1000}`,
-    state: (SEARCH_STATES)[hash % 8],
+    fee: `₹${((hash % 150) + 30) * 1000}`,
+    state: SEARCH_STATES[hash % 8],
     placement: `${72 + (hash % 26)}%`,
   };
 }

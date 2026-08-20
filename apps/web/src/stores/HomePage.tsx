@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { GraduationCap, Menu, Star, X } from "lucide-react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   CitySuggestion,
   CollegeListItem,
@@ -21,6 +21,8 @@ import { HowItWorks } from "../components/landing/HowItWorks";
 import { LeadCapture } from "../components/landing/LeadCapture";
 import { Testimonials } from "../components/landing/Testimonials";
 import { CollegesListTable } from "../components/landing/CollegesListTable";
+import { HomeFaqSection } from "../components/landing/HomeFaqSection";
+import { normalizeCourseQuery, toCollegeSlug } from "../components/seoUtils";
 
 // Fallbacks for the initial load, used only until the user explicitly picks a
 // course/city. Kept small (5 each) and randomly chosen so every fresh visit
@@ -57,6 +59,7 @@ export default function HomePage() {
   const openLocationPopup = useLocationPopupStore((state) => state.open);
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as
     | string
     | undefined;
@@ -165,7 +168,8 @@ export default function HomePage() {
     // page loads fine before the user explicitly picks them; once a specific
     // value is provided it wins. No location popup is triggered from here.
     const name = effective.name?.trim() || "";
-    const course = effective.course?.trim() || pickRandom(FALLBACK_COURSES);
+    const rawCourse = effective.course?.trim() || pickRandom(FALLBACK_COURSES);
+    const course = normalizeCourseQuery(rawCourse);
     const preferred = readPreferredLocation();
     const city = (
       effective.city?.trim() ||
@@ -175,6 +179,12 @@ export default function HomePage() {
 
     const keyword = name || course;
     const cityQuery = `&city=${encodeURIComponent(city)}`;
+    const state = (
+      effective.state?.trim() ||
+      preferred.state ||
+      ""
+    ).trim();
+    const stateQuery = state ? `&state=${encodeURIComponent(state)}` : "";
 
     setLoadingSuggestions(true);
     setSelectedCollege(null);
@@ -182,7 +192,7 @@ export default function HomePage() {
 
     try {
       const searchResponse = await request(
-        `/colleges/search?query=${encodeURIComponent(keyword)}${cityQuery}`,
+        `/colleges/search?query=${encodeURIComponent(keyword)}${cityQuery}${stateQuery}`,
       );
       if (!searchResponse.ok)
         throw new Error(`Shiksha search failed (${searchResponse.status})`);
@@ -198,7 +208,7 @@ export default function HomePage() {
         // Course/category search → fetch the category college list as before.
         const categoryUrl = toShikshaCityUrl(result.url || "", city);
         const listResponse = await request(
-          `/colleges?url=${encodeURIComponent(categoryUrl)}${cityQuery}`,
+          `/colleges?url=${encodeURIComponent(categoryUrl)}${cityQuery}${stateQuery}`,
         );
         if (!listResponse.ok)
           throw new Error(`College list failed (${listResponse.status})`);
@@ -216,7 +226,25 @@ export default function HomePage() {
 
   // Initial load: reuse the session-cached list if available to avoid a redundant
   // API call on refresh / navigation back. A new search overwrites the cache.
+  // If ?course= / ?city= query params are present (e.g. from Related Links on a
+  // college detail page) pre-fill the filters and trigger a targeted search.
   useEffect(() => {
+    const qCourse = searchParams.get("course")?.trim() ?? "";
+    const qCity = searchParams.get("city")?.trim() ?? "";
+
+    if (qCourse || qCity) {
+      // Pre-fill filters from URL params
+      if (qCourse) setFilter("course", qCourse);
+      if (qCity) setFilter("city", qCity);
+      // Trigger a fresh search with these params
+      void search({ course: qCourse || undefined, city: qCity || undefined });
+      // Scroll to the results section
+      window.setTimeout(() => {
+        document.getElementById("colleges")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 400);
+      return;
+    }
+
     const cached = readCachedSuggestions();
     if (cached && cached.length > 0) {
       setSuggestions(cached);
@@ -225,7 +253,7 @@ export default function HomePage() {
     }
     void search();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request]);
+  }, [request, searchParams]);
 
   // Mapbox city autocomplete
   useEffect(() => {
@@ -359,8 +387,9 @@ export default function HomePage() {
 
     setSelectedCollege(null);
     setSelectedSuggestion(fresh);
-    const targetId = String(fresh.instituteId ?? fresh.slug ?? fresh.name ?? "");
-    navigate(`/college-detail/${targetId}`, { state: { college: fresh } });
+    // Build a human-readable, SEO-friendly URL slug: college-name-city
+    const urlSlug = toCollegeSlug(fresh.name, fresh.city ?? null);
+    navigate(`/college-detail/${urlSlug}`, { state: { college: fresh } });
   };
   const onExplore = (category: string) => {
     const query = CATEGORY_SEARCH_MAP[category] ?? category;
@@ -529,6 +558,9 @@ export default function HomePage() {
       <LeadCapture sent={sent} onSubmit={enquire} />
 
       <Testimonials testimonials={testimonials} />
+
+      <HomeFaqSection />
+
       {/* Feedback form */}
       <section
         id="feedback"

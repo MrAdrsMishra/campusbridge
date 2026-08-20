@@ -3,7 +3,7 @@ import { GraduationCap, MapPin, Search, ShieldCheck, Sparkles } from "lucide-rea
 import { HERO_SLIDES, TYPED_PHRASES, TRUST_BADGES } from "../../data/landingData";
 import { useTypewriter } from "../../hooks/useTypewriter";
 import type { CollegeListItem } from "../../types";
-import { fullImageUrl } from "../ui";
+import { formatImageUrl } from "../ui";
 
 const SLIDE_MS = 5000;
 
@@ -24,10 +24,15 @@ export function HeroSection({
   // Background slides come from the colleges' header images, so the hero shows real
   // campus photos with the college name in the corner. Falls back to the generic
   // HERO_SLIDES when no college has a header image yet.
+  //
+  // NOTE: we deliberately use formatImageUrl (NOT fullImageUrl) here. Shiksha's
+  // image store only serves the resized thumbnail (e.g. "..._270x200.jpg"); the
+  // full-size/stripped URL returns 403 (hotlink protection), so stripping the size
+  // token would leave the hero with broken images.
   const slides = useMemo(() => {
     const collegeSlides = colleges
       .filter((c) => c.headerImage)
-      .map((c) => ({ image: fullImageUrl(c.headerImage) ?? "", name: c.name }));
+      .map((c) => ({ image: formatImageUrl(c.headerImage) ?? "", name: c.name }));
     if (collegeSlides.length > 0) return collegeSlides;
     return HERO_SLIDES.map((src) => ({ image: src, name: null }));
   }, [colleges]);

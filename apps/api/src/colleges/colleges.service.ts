@@ -311,6 +311,23 @@ const COLLEGE360_NAME_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_SUGGESTIONS = 8;
 const MAX_COURSE_FILTER_LOOKUPS = 15;
 const COURSE_FILTER_CONCURRENCY = 4;
+// The autosuggestor API reports college-category results under these `type`
+// values (rather than `institute`). We accept all of them as a Step-2 category
+// URL, provided the URL also looks like a category page.
+const SHIKSHA_CATEGORY_RESULT_TYPES = new Set([
+  "stream",
+  "stream_city",
+  "substream",
+  "substream_city",
+  "base_course",
+  "base_course_city",
+  "base_course_state",
+  "course",
+  "course_city",
+  "popular_course",
+  "degree",
+  "category",
+]);
 // const COLLEGE360_RESOLVE_CONCURRENCY = 4;
 // Minimum token-overlap score (0..1) for the College360 name-resolution fallback.
 const COLLEGE360_MATCH_THRESHOLD = 0.75;
@@ -497,6 +514,7 @@ export class CollegesService implements OnModuleInit {
   async searchShiksha(
     query: string,
     city?: string,
+    state?: string,
   ): Promise<ShikshaCategoryResult | CollegeListItem[]> {
     const keyword = query.trim();
     if (!keyword) {
@@ -526,9 +544,29 @@ export class CollegesService implements OnModuleInit {
       return this.getCollegesByInstituteNames(institutes, city);
     }
     const relevant =
-      results.find((r) => r.type === "stream" && r.url) ??
+      results.find(
+        (r) =>
+          r.url &&
+          SHIKSHA_CATEGORY_RESULT_TYPES.has(r.type ?? "") &&
+          this.isShikshaCategoryUrl(r.url),
+      ) ??
       results.find((r) => r.url && this.isShikshaCategoryUrl(r.url));
     if (!relevant?.url) {
+      const candidates = [
+        this.normalizeCategoryKeyword(keyword),
+        "BCA",
+        "Engineering",
+      ].filter((k, idx, arr) => Boolean(k) && k !== keyword && arr.indexOf(k) === idx);
+
+      for (const alt of candidates) {
+        try {
+          const fallback = await this.searchShiksha(alt, city, state);
+          if (fallback) return fallback;
+        } catch {
+          /* try next candidate */
+        }
+      }
+
       throw new NotFoundException(
         `No matching category found for "${keyword}".`,
       );
@@ -536,6 +574,169 @@ export class CollegesService implements OnModuleInit {
 
     return { name: relevant.name, url: relevant.url };
   }
+
+  private normalizeCategoryKeyword(query: string): string {
+    if (!query) return "Engineering";
+    let cleaned = query.trim();
+
+    // Strip common prefix qualifiers
+    cleaned = cleaned.replace(/^(Private|Government|Govt|Top|Best|Popular)\s+/i, "");
+    // Strip common suffix qualifiers
+    cleaned = cleaned.replace(/\s+(Colleges|Institutes|Courses|Degrees|Course|Programs)(\s+in\s+.*)?$/i, "");
+    cleaned = cleaned.trim();
+
+    // Standardized category alias mapping
+    const ALIASES: Record<string, string> = {
+      // Computer Applications / IT
+      "Computer Applications": "BCA",
+      "Computer Applications & IT": "BCA",
+      "Computer Applications and IT": "BCA",
+      "IT and Computer Applications": "BCA",
+      "IT & Computer Applications": "BCA",
+      "Computer": "BCA",
+      "IT": "BCA",
+      "BCA": "BCA",
+      "MCA": "BCA",
+
+      // Engineering & Technology
+      "Engineering": "Engineering",
+      "Engineering & Technology": "Engineering",
+      "Engineering and Technology": "Engineering",
+      "B.Tech": "Engineering",
+      "Bachelor of Technology": "Engineering",
+      "M.Tech": "Engineering",
+      "Master of Technology": "Engineering",
+
+      // Management & Business
+      "Management": "Management",
+      "Management & Business": "Management",
+      "Management and Business": "Management",
+      "Management & Business Administration": "Management",
+      "Management and Business Administration": "Management",
+      "MBA": "Management",
+      "Master of Business Administration": "Management",
+      "BBA": "Management",
+      "Bachelor of Business Administration": "Management",
+
+      // Medical & Healthcare
+      "Medical": "Medical",
+      "Medical & Healthcare": "Medical",
+      "Medical and Healthcare": "Medical",
+      "Medicine & Health Sciences": "Medical",
+      "Medicine and Health Sciences": "Medical",
+      "MBBS": "Medical",
+      "Nursing": "Medical",
+
+      // Science
+      "Science": "Science",
+      "B.Sc": "Science",
+      "M.Sc": "Science",
+
+      // Commerce & Finance
+      "Commerce": "Commerce",
+      "Commerce & Finance": "Commerce",
+      "Commerce and Finance": "Commerce",
+      "B.Com": "Commerce",
+      "M.Com": "Commerce",
+
+      // Law & Legal Studies
+      "Law": "Law",
+      "Law & Legal Studies": "Law",
+      "Law and Legal Studies": "Law",
+      "LL.B": "Law",
+      "LL.M": "Law",
+
+      // Architecture & Planning
+      "Architecture": "Architecture",
+      "Architecture & Planning": "Architecture",
+      "Architecture and Planning": "Architecture",
+      "Architecture and Planning Course": "Architecture",
+      "B.Arch": "Architecture",
+
+      // Design & Fine Arts
+      "Design": "Design",
+      "Design & Fine Arts": "Design",
+      "Design and Fine Arts": "Design",
+      "B.Des": "Design",
+      "Animation & Design": "Design",
+
+      // Arts, Humanities & Social Sciences
+      "Arts": "Arts",
+      "Arts, Humanities & Social Sciences": "Arts",
+      "Arts, Humanities and Social Sciences": "Arts",
+      "Humanities & Social Sciences": "Arts",
+      "Humanities and Social Sciences": "Arts",
+      "BA": "Arts",
+      "MA": "Arts",
+      "Mass Communication & Media": "Arts",
+      "Mass Communication and Media": "Arts",
+
+      // Pharmacy
+      "Pharmacy": "Pharmacy",
+      "B.Pharm": "Pharmacy",
+      "D.Pharm": "Pharmacy",
+
+      // Paramedical & Allied Health
+      "Paramedical": "Paramedical",
+      "Paramedical & Allied Health": "Paramedical",
+      "Paramedical and Allied Health": "Paramedical",
+
+      // Education & Teaching
+      "Education": "Education",
+      "Education & Teaching": "Education",
+      "Education and Teaching": "Education",
+      "Teaching & Education": "Education",
+      "Teaching and Education": "Education",
+      "B.Ed": "Education",
+
+      // Hotel Management & Hospitality
+      "Hotel Management": "Hotel Management",
+      "Hotel Management & Hospitality": "Hotel Management",
+      "Hotel Management and Hospitality": "Hotel Management",
+      "Hospitality & Travel": "Hotel Management",
+      "Hospitality and Travel": "Hotel Management",
+      "BHM": "Hotel Management",
+
+      // Doctoral / PhD
+      "PhD": "PhD",
+      "Doctoral & Research": "PhD",
+      "Doctoral and Research": "PhD",
+      "Doctoral / Research Programs": "PhD",
+
+      // Vocational & Skill-Based
+      "Vocational": "Vocational",
+      "Vocational & Skill-Based": "Vocational",
+      "Vocational and Skill-Based": "Vocational",
+    };
+
+    if (ALIASES[cleaned]) return ALIASES[cleaned];
+
+    const lower = cleaned.toLowerCase();
+    for (const [key, val] of Object.entries(ALIASES)) {
+      if (key.toLowerCase() === lower) return val;
+    }
+
+    // Regex fallback mapping
+    if (/computer|bca|mca|it/i.test(cleaned)) return "BCA";
+    if (/engineering|b\.tech|m\.tech/i.test(cleaned)) return "Engineering";
+    if (/management|mba|bba/i.test(cleaned)) return "Management";
+    if (/medical|medicine|mbbs|nursing/i.test(cleaned)) return "Medical";
+    if (/science|b\.sc|m\.sc/i.test(cleaned)) return "Science";
+    if (/commerce|b\.com|m\.com|finance/i.test(cleaned)) return "Commerce";
+    if (/law|ll\.b|legal/i.test(cleaned)) return "Law";
+    if (/architecture|b\.arch/i.test(cleaned)) return "Architecture";
+    if (/design|b\.des|animation/i.test(cleaned)) return "Design";
+    if (/arts|humanities|media|journalism/i.test(cleaned)) return "Arts";
+    if (/pharmacy|b\.pharm/i.test(cleaned)) return "Pharmacy";
+    if (/paramedical/i.test(cleaned)) return "Paramedical";
+    if (/education|teaching|b\.ed/i.test(cleaned)) return "Education";
+    if (/hotel|hospitality|bhm/i.test(cleaned)) return "Hotel Management";
+    if (/phd|doctoral|research/i.test(cleaned)) return "PhD";
+    if (/vocational|skill/i.test(cleaned)) return "Vocational";
+
+    return cleaned;
+  }
+
 
   /**
    * Step 2 — Fetch a Shiksha category page and resolve every college against College360.
@@ -546,6 +747,7 @@ export class CollegesService implements OnModuleInit {
   async getCollegesFromShiksha(
     url: string,
     city?: string,
+    state?: string,
   ): Promise<CollegeListItem[]> {
     const categoryUrl = this.normalizeShikshaCategoryUrl(url);
     const resolvedCity = this.resolveCategoryCity(categoryUrl, city);
@@ -554,23 +756,40 @@ export class CollegesService implements OnModuleInit {
 
     if (cached) return cached;
 
-    const requestUrl = `${SHIKSHA_CATEGORY_ENDPOINT}?data=${encodeURIComponent(
-      Buffer.from(JSON.stringify({ url: categoryUrl })).toString("base64"),
-    )}`;
+    // Shiksha doesn't publish a learned category page for every (course, city)
+    // pairing — a missing localized page returns 404. Fall back through the most
+    // specific candidates we can derive so the search still returns colleges:
+    //   passed city URL → state page → national page.
+    const candidateUrls = this.buildShikshaCategoryCandidates(
+      categoryUrl,
+      city,
+      state,
+    );
 
-    const raw = await this.fetchJson<ShikshaCategoryResponse>(requestUrl);
+    let instituteTuples: ShikshaInstituteTuple[] | null = null;
 
-    if (
-      !raw ||
-      raw.status !== "success" ||
-      !Array.isArray(raw.data?.instituteTuples)
-    ) {
+    for (const candidate of candidateUrls) {
+      const requestUrl = `${SHIKSHA_CATEGORY_ENDPOINT}?data=${encodeURIComponent(
+        Buffer.from(JSON.stringify({ url: candidate })).toString("base64"),
+      )}`;
+      const attempt = await this.fetchJson<ShikshaCategoryResponse>(requestUrl);
+      if (
+        attempt &&
+        attempt.status === "success" &&
+        Array.isArray(attempt.data?.instituteTuples)
+      ) {
+        instituteTuples = attempt.data.instituteTuples;
+        break;
+      }
+    }
+
+    if (!instituteTuples) {
       throw new BadGatewayException(
         "Shiksha category data is temporarily unavailable.",
       );
     }
 
-    const list: CollegeListItem[] = raw.data.instituteTuples.map((tuple) => ({
+    const list: CollegeListItem[] = instituteTuples.map((tuple) => ({
       instituteId: tuple.instituteId ?? null,
       name: tuple.name?.trim() ?? "",
       logo: this.formatAssetUrl(tuple.logoImageUrl),
@@ -598,6 +817,38 @@ export class CollegesService implements OnModuleInit {
     }
 
     return list;
+  }
+
+  /**
+   * Ordered category URLs to try for a Shiksha category request: the exact URL
+   * first, then a state-scoped page (if a state was provided), then the national
+   * "colleges-india" page. "colleges-" is the region token the category API uses.
+   */
+  private buildShikshaCategoryCandidates(
+    categoryUrl: string,
+    city?: string,
+    state?: string,
+  ): string[] {
+    const marker = "colleges-";
+    const idx = categoryUrl.lastIndexOf(marker);
+    const candidates: string[] = [];
+
+    const push = (url: string) => {
+      if (url && !candidates.includes(url)) candidates.push(url);
+    };
+
+    push(categoryUrl);
+
+    if (idx >= 0) {
+      const prefix = categoryUrl.slice(0, idx + marker.length);
+      const stateSlug = state?.trim().toLowerCase().replace(/\s+/g, "-");
+      if (stateSlug) push(`${prefix}${stateSlug}`);
+      const citySlug = city?.trim().toLowerCase().replace(/\s+/g, "-");
+      if (citySlug) push(`${prefix}${citySlug}`);
+      push(`${prefix}india`);
+    }
+
+    return candidates;
   }
 
   /**
@@ -1347,7 +1598,9 @@ export class CollegesService implements OnModuleInit {
   }
 
   private isShikshaCategoryUrl(url: string): boolean {
-    return /\/colleges\/colleges-/.test(url);
+    if (!url || typeof url !== "string") return false;
+    // Category pages follow e.g. "/it-software/colleges/bca-colleges-india", "/bca-colleges-india", or "/colleges-bhopal".
+    return url.includes("colleges-") || /\/colleges\//i.test(url);
   }
 
   /** City slug embedded in a Shiksha category URL, e.g. "colleges-bhopal" -> "Bhopal". */
@@ -1704,6 +1957,55 @@ export class CollegesService implements OnModuleInit {
     }
     const cleanPath = path.replace(/^\/+/, "");
     return `${COLLEGE360_ASSET_BASE}/${cleanPath}`;
+  }
+
+  /**
+   * Proxy a hotlink-protected college image so the browser can render it (Shiksha's S3
+   * bucket returns 403 to direct <img> requests). We fetch it server-side with the same
+   * browser-like headers the scrapers use, then hand the bytes (allowed image content
+   * only) back. The host whitelist doubles as an SSRF guard.
+   */
+  async proxyImage(
+    imageUrl: string,
+  ): Promise<{ data: Buffer; contentType: string } | null> {
+    let parsed: URL;
+    try {
+      parsed = new URL(imageUrl);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const allowed =
+      host === "images.shiksha.com" ||
+      host === "newassets.shiksha.com" ||
+      host.endsWith(".shiksha.com") ||
+      host.endsWith(".cloudfront.net") ||
+      host.endsWith("college360.co.in");
+    if (!allowed) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch(imageUrl, {
+        headers: DEFAULT_FETCH_HEADERS,
+        signal: controller.signal,
+        redirect: "follow",
+      });
+      if (!response.ok) return null;
+
+      const contentType = response.headers.get("content-type") ?? "image/jpeg";
+      if (!contentType.toLowerCase().startsWith("image/")) return null;
+
+      const data = Buffer.from(await response.arrayBuffer());
+      if (data.byteLength === 0) return null;
+      return { data, contentType };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private escapeRegExp(value: string) {

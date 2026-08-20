@@ -4,6 +4,10 @@ import { ArrowLeft, Building2, GraduationCap, MapPin, RefreshCw, Star } from "lu
 import { CollegeListItem } from "../types";
 import { useApiStore } from "../stores/apiStore";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { formatImageUrl } from "../components/ui";
+import { CollegeFaqSection } from "../components/CollegeFaqSection";
+import { CollegeRelatedLinks } from "../components/CollegeRelatedLinks";
+import { toCollegeSlug } from "../components/seoUtils";
 
 const CollegeDetail = () => {
   const {
@@ -15,7 +19,7 @@ const CollegeDetail = () => {
     suggestions,
   } = useHomeStore();
 
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const { state } = useLocation();
   const navigate = useNavigate();
   const request = useApiStore((state) => state.request);
@@ -33,8 +37,14 @@ const CollegeDetail = () => {
       } catch { }
       return state.college as CollegeListItem;
     }
-    if (id && suggestions.length > 0) {
-      const match = suggestions.find((s) => String(s.instituteId ?? "") === id || s.slug === id);
+    if (slug && suggestions.length > 0) {
+      // Primary match: compare the URL slug against the generated slug for each suggestion.
+      // Fallback: numeric instituteId or raw College360 slug (backward compat with old URLs).
+      const match = suggestions.find((s) =>
+        toCollegeSlug(s.name, s.city ?? null) === slug ||
+        String(s.instituteId ?? "") === slug ||
+        s.slug === slug
+      );
       if (match) {
         try {
           sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(match));
@@ -53,7 +63,7 @@ const CollegeDetail = () => {
       if (saved) return JSON.parse(saved) as CollegeListItem;
     } catch { }
     return null;
-  }, [state?.college, id, suggestions, selectedSuggestion]);
+  }, [state?.college, slug, suggestions, selectedSuggestion]);
 
   const targetCollege = getTargetCollege();
 
@@ -282,7 +292,7 @@ const CollegeDetail = () => {
                 <div className="flex items-start gap-4">
                   {selectedCollege.logo ? (
                     <img
-                      src={selectedCollege.logo}
+                      src={formatImageUrl(selectedCollege.logo) ?? ""}
                       alt={selectedCollege.name}
                       className="h-16 w-16 rounded-2xl object-cover border border-slate-100"
                     />
@@ -316,7 +326,7 @@ const CollegeDetail = () => {
               {selectedCollege.backgroundImage && (
                 <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
                   <img
-                    src={selectedCollege.backgroundImage}
+                    src={formatImageUrl(selectedCollege.backgroundImage) ?? ""}
                     alt={selectedCollege.name}
                     className="h-64 w-full object-cover sm:h-80"
                   />
@@ -396,6 +406,26 @@ const CollegeDetail = () => {
                 )}
               </div>
             </div>
+
+            {/* ── SEO: FAQ section ── */}
+            {(() => {
+              const currentCourse =
+                Object.keys(selectedCollege.coursesByCategory)[0] ??
+                useHomeStore.getState().filters.course ??
+                "Engineering";
+              return (
+                <>
+                  <CollegeFaqSection
+                    college={selectedCollege}
+                    currentCourse={currentCourse}
+                  />
+                  <CollegeRelatedLinks
+                    college={selectedCollege}
+                    currentCourse={currentCourse}
+                  />
+                </>
+              );
+            })()}
           </div>
         )}
       </section>

@@ -1,5 +1,13 @@
 // src/colleges/colleges.controller.ts
-import { BadRequestException, Controller, Get, NotFoundException, Query } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Header,
+  NotFoundException,
+  Query,
+  StreamableFile,
+} from "@nestjs/common";
 import { CollegesService } from "./colleges.service";
 import {
   CollegeScrapeQueryDto,
@@ -18,13 +26,17 @@ export class CollegesController {
   //   - course/category → returns the single { name, url } category for Step 2.
   @Get("search")
   search(@Query() query: ShikshaSearchQueryDto) {
-    return this.service.searchShiksha(query.query, query.city);
+    return this.service.searchShiksha(query.query, query.city, query.state);
   }
 
   // Step 2 — Resolve a Shiksha category page into a clean College360-backed list.
   @Get()
   all(@Query() query: ShikshaCollegeListQueryDto) {
-    return this.service.getCollegesFromShiksha(query.url, query.city);
+    return this.service.getCollegesFromShiksha(
+      query.url,
+      query.city,
+      query.state,
+    );
   }
 
   // Kept for backward compatibility — the web app still uses this College360 flow.
@@ -78,5 +90,23 @@ export class CollegesController {
     const result = await this.service.getCollegeDetailView(slug, seriesId);
     if (!result) throw new NotFoundException("Not able to load");
     return result;
+  }
+
+  // Image hotlink-proxy. Shiksha serves its campus photos/logos from an S3 bucket that
+  // returns 403 to direct browser requests (referer/hotlink protection). This endpoint
+  // fetches the image server-side using the same browser-like headers as the scrapers,
+  // then hands the bytes back to the browser so <img> tags render without being blocked.
+  @Get("image")
+  @Header("Cache-Control", "public, max-age=86400, immutable")
+  @Header("X-Content-Type-Options", "nosniff")
+  async image(@Query("url") url: string) {
+    if (!url || typeof url !== "string" || url.trim().length === 0) {
+      throw new BadRequestException("Missing image url.");
+    }
+    const proxied = await this.service.proxyImage(url);
+    if (!proxied) {
+      throw new NotFoundException("Image unavailable.");
+    }
+    return new StreamableFile(proxied.data, { type: proxied.contentType });
   }
 }

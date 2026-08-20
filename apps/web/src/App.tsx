@@ -27,8 +27,11 @@ export default function App() {
         <div className="flex-1">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/colleges" element={<HomePage />} />
             <Route path="/college-detail" element={<CollegeDetail />} />
-            <Route path="/college-detail/:id" element={<CollegeDetail />} />
+            <Route path="/college-detail/:slug" element={<CollegeDetail />} />
+            <Route path="/college-details" element={<CollegeDetail />} />
+            <Route path="/college-details/:slug" element={<CollegeDetail />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dashboard" element={<DashboardRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />

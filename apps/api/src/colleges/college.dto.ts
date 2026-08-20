@@ -58,6 +58,11 @@ export class ShikshaSearchQueryDto {
   @IsString()
   @Length(1, 100)
   city?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  state?: string;
 }
 
 // src/colleges/dto/shiksha-college-list-query.dto.ts
@@ -71,6 +76,11 @@ export class ShikshaCollegeListQueryDto {
   @IsString()
   @Length(1, 100)
   city?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  state?: string;
 }
 // src/colleges/pipes/parse-object-id.pipe.ts
 
