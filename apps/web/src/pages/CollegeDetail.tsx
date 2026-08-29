@@ -1,15 +1,29 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useHomeStore } from "../stores/homeStore";
-import { ArrowLeft, Building2, GraduationCap, MapPin, RefreshCw, Star } from "lucide-react";
+import { ArrowLeft, Building2, GraduationCap, MapPin, RefreshCw, Star, IndianRupee, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { CollegeListItem } from "../types";
 import { useApiStore } from "../stores/apiStore";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { formatImageUrl } from "../components/ui";
 import { CollegeFaqSection } from "../components/CollegeFaqSection";
 import { CollegeRelatedLinks } from "../components/CollegeRelatedLinks";
-import { toCollegeSlug } from "../components/seoUtils";
+import { generateCollegeSchema, toCollegeSlug } from "../components/seoUtils";
+import { SeoHead } from "../components/SeoHead";
+import { Breadcrumbs } from "../components/Breadcrumbs";
+import { RecommendationSection } from "../components/RecommendationSection";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
-const CollegeDetail = () => {
+
+const formatCollegeTypeString = (val?: unknown): string => {
+  if (!val) return "Recognised Institute";
+  if (typeof val === "string") return val;
+  if (typeof val === "object" && val !== null && "type" in val && typeof (val as { type?: unknown }).type === "string") {
+    return (val as { type: string }).type;
+  }
+  return "Recognised Institute";
+};
+
+const CollegeDetailContent = () => {
   const {
     selectedCollege,
     selectedSuggestion,
@@ -120,6 +134,13 @@ const CollegeDetail = () => {
 
   const isFetching = loadingCollege || (targetCollege !== null && selectedCollege === null && !error);
 
+  const city = selectedCollege?.address?.city ?? null;
+  const stateName = selectedCollege?.address?.state ?? null;
+  const fullAddress = selectedCollege?.address?.full ?? null;
+  const coursesByCategory = selectedCollege?.coursesByCategory ?? {};
+  const reviews = selectedCollege?.reviews ?? [];
+  const facilities = selectedCollege?.facilities ?? [];
+
   return (
     <main className="min-h-screen bg-[#fbfcfa] text-ink">
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 sm:py-5 border-b border-slate-100 bg-white">
@@ -142,134 +163,134 @@ const CollegeDetail = () => {
 
       <section className="mx-auto max-w-4xl px-4 sm:px-6 pb-16 pt-5">
         {isFetching && (
-  <div className="space-y-6">
-    {/* College header skeleton */}
-    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          {/* Logo */}
-          <div className="h-16 w-16 shrink-0 rounded-2xl bg-slate-200" />
+          <div className="space-y-6">
+            {/* College header skeleton */}
+            <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  {/* Logo */}
+                  <div className="h-16 w-16 shrink-0 rounded-2xl bg-slate-200" />
 
-          <div className="flex-1 space-y-3">
-            {/* College name */}
-            <div className="h-7 w-64 rounded-lg bg-slate-200 sm:w-96" />
+                  <div className="flex-1 space-y-3">
+                    {/* College name */}
+                    <div className="h-7 w-64 rounded-lg bg-slate-200 sm:w-96" />
 
-            {/* Location */}
-            <div className="h-4 w-40 rounded-md bg-slate-100" />
+                    {/* Location */}
+                    <div className="h-4 w-40 rounded-md bg-slate-100" />
+                  </div>
+                </div>
+
+                {/* Refresh button */}
+                <div className="h-10 w-36 rounded-2xl bg-slate-100" />
+              </div>
+
+              {/* Background image */}
+              <div className="mt-6 h-64 w-full rounded-2xl bg-slate-200 sm:h-80" />
+
+              {/* Address / description */}
+              <div className="mt-6 space-y-4 rounded-2xl bg-slate-50 p-5">
+                <div className="h-4 w-3/4 rounded-md bg-slate-200" />
+                <div className="h-4 w-full rounded-md bg-slate-200" />
+                <div className="h-4 w-5/6 rounded-md bg-slate-200" />
+              </div>
+            </div>
+
+            {/* Courses skeleton */}
+            <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+              <div className="h-4 w-32 rounded-md bg-slate-200" />
+
+              <div className="mt-6 space-y-6">
+                <div>
+                  <div className="h-4 w-40 rounded-md bg-slate-200" />
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="h-8 w-28 rounded-full bg-slate-100" />
+                    <div className="h-8 w-36 rounded-full bg-slate-100" />
+                    <div className="h-8 w-24 rounded-full bg-slate-100" />
+                    <div className="h-8 w-32 rounded-full bg-slate-100" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="h-4 w-36 rounded-md bg-slate-200" />
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="h-8 w-32 rounded-full bg-slate-100" />
+                    <div className="h-8 w-24 rounded-full bg-slate-100" />
+                    <div className="h-8 w-40 rounded-full bg-slate-100" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Reviews skeleton */}
+            <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+              <div className="h-4 w-32 rounded-md bg-slate-200" />
+
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl bg-slate-50 p-5">
+                  <div className="h-4 w-20 rounded-md bg-slate-200" />
+                  <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
+                  <div className="mt-2 h-4 w-4/5 rounded-md bg-slate-100" />
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-5">
+                  <div className="h-4 w-20 rounded-md bg-slate-200" />
+                  <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
+                  <div className="mt-2 h-4 w-3/4 rounded-md bg-slate-100" />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Refresh button */}
-        <div className="h-10 w-36 rounded-2xl bg-slate-100" />
-      </div>
+        {error && !loadingCollege && !selectedCollege && (
+          <div className="flex min-h-[420px] items-center justify-center">
+            <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+              {/* Error icon */}
+              <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose-50 ring-8 ring-rose-50/50">
+                <Building2 size={28} className="text-rose-500" />
+              </div>
 
-      {/* Background image */}
-      <div className="mt-6 h-64 w-full rounded-2xl bg-slate-200 sm:h-80" />
+              {/* Message */}
+              <div className="mt-6">
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  Unable to load college
+                </h2>
 
-      {/* Address / description */}
-      <div className="mt-6 space-y-4 rounded-2xl bg-slate-50 p-5">
-        <div className="h-4 w-3/4 rounded-md bg-slate-200" />
-        <div className="h-4 w-full rounded-md bg-slate-200" />
-        <div className="h-4 w-5/6 rounded-md bg-slate-200" />
-      </div>
-    </div>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                  OOps!! We are still gathering details of this college. Belive US.
+                </p>
+              </div>
 
-    {/* Courses skeleton */}
-    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
-      <div className="h-4 w-32 rounded-md bg-slate-200" />
+              {/* Actions */}
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void fetchCollege()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+                >
+                  <RefreshCw size={15} />
+                  Try again
+                </button>
 
-      <div className="mt-6 space-y-6">
-        <div>
-          <div className="h-4 w-40 rounded-md bg-slate-200" />
+                <button
+                  type="button"
+                  onClick={() => navigate("/#colleges")}
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Back to colleges
+                </button>
+              </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <div className="h-8 w-28 rounded-full bg-slate-100" />
-            <div className="h-8 w-36 rounded-full bg-slate-100" />
-            <div className="h-8 w-24 rounded-full bg-slate-100" />
-            <div className="h-8 w-32 rounded-full bg-slate-100" />
+              {/* Subtle status */}
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                Something went wrong while fetching the details
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div>
-          <div className="h-4 w-36 rounded-md bg-slate-200" />
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <div className="h-8 w-32 rounded-full bg-slate-100" />
-            <div className="h-8 w-24 rounded-full bg-slate-100" />
-            <div className="h-8 w-40 rounded-full bg-slate-100" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Reviews skeleton */}
-    <div className="animate-pulse rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
-      <div className="h-4 w-32 rounded-md bg-slate-200" />
-
-      <div className="mt-6 space-y-4">
-        <div className="rounded-2xl bg-slate-50 p-5">
-          <div className="h-4 w-20 rounded-md bg-slate-200" />
-          <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
-          <div className="mt-2 h-4 w-4/5 rounded-md bg-slate-100" />
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-5">
-          <div className="h-4 w-20 rounded-md bg-slate-200" />
-          <div className="mt-4 h-4 w-full rounded-md bg-slate-100" />
-          <div className="mt-2 h-4 w-3/4 rounded-md bg-slate-100" />
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-      {error && !loadingCollege && !selectedCollege && (
-  <div className="flex min-h-[420px] items-center justify-center">
-    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
-      {/* Error icon */}
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose-50 ring-8 ring-rose-50/50">
-        <Building2 size={28} className="text-rose-500" />
-      </div>
-
-      {/* Message */}
-      <div className="mt-6">
-        <h2 className="text-xl font-extrabold text-slate-900">
-          Unable to load college
-        </h2>
-
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
-          OOps!! We are still gathering details of this college. Belive US.
-        </p>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <button
-          type="button"
-          onClick={() => void fetchCollege()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
-        >
-          <RefreshCw size={15} />
-          Try again
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate("/#colleges")}
-          className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          Back to colleges
-        </button>
-      </div>
-
-      {/* Subtle status */}
-      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-        Something went wrong while fetching the details
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
         {!targetCollege && !selectedCollege && !loadingCollege && !error && (
           <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
@@ -287,13 +308,32 @@ const CollegeDetail = () => {
 
         {selectedCollege && !isFetching && (
           <div className="space-y-6">
+            <SeoHead
+              title={`${selectedCollege.name}${city ? ` ${city}` : ""}: Courses, Fees, Admission & Placements 2026`}
+              description={`Explore ${selectedCollege.name}${city ? ` in ${city}` : ""} course list, fees structure, eligibility criteria, admission guidelines and verified placement records.`}
+              canonicalUrl={`/colleges/${toCollegeSlug(selectedCollege.name, city)}`}
+              ogImage={formatImageUrl(selectedCollege.backgroundImage || selectedCollege.logo || "") || undefined}
+              jsonLd={generateCollegeSchema(selectedCollege)}
+            />
+
+            <Breadcrumbs
+              items={[
+                { label: "Colleges", href: "/colleges" },
+                ...(city
+                  ? [{ label: city, href: `/colleges/${city.toLowerCase()}` }]
+                  : []),
+                { label: selectedCollege.name },
+              ]}
+            />
+
             <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-4">
                   {selectedCollege.logo ? (
                     <img
                       src={formatImageUrl(selectedCollege.logo) ?? ""}
-                      alt={selectedCollege.name}
+                      alt={`${selectedCollege.name} Logo`}
+                      loading="lazy"
                       className="h-16 w-16 rounded-2xl object-cover border border-slate-100"
                     />
                   ) : (
@@ -305,10 +345,11 @@ const CollegeDetail = () => {
                     <h1 className="text-2xl font-extrabold leading-tight sm:text-3xl">
                       {selectedCollege.name}
                     </h1>
+
                     <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-slate-500">
                       <MapPin size={16} className="text-emerald-600" />
-                      {selectedCollege.address.city ?? "Unknown city"}
-                      {selectedCollege.address.state ? `, ${selectedCollege.address.state}` : ""}
+                      {city ?? "Unknown city"}
+                      {stateName ? `, ${stateName}` : ""}
                     </p>
                   </div>
                 </div>
@@ -321,6 +362,51 @@ const CollegeDetail = () => {
                   <RefreshCw size={14} className={loadingCollege ? "animate-spin" : ""} />
                   {loadingCollege ? "Refreshing..." : "Refresh details"}
                 </button>
+              </div>
+
+              {/* Key Overview Metrics Grid (Fees, Rating, Ownership) */}
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
+                    <IndianRupee size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Fees</div>
+                    <div className="text-sm font-extrabold text-slate-800">
+                      {selectedCollege.averageFees
+                        ? `₹${selectedCollege.averageFees.toLocaleString("en-IN")} / yr`
+                        : "Contact for Fees"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600">
+                    <Star size={20} className="fill-amber-500 text-amber-500" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rating Score</div>
+                    <div className="text-sm font-extrabold text-slate-800">
+                      {selectedCollege.aggregateRating
+                        ? `${selectedCollege.aggregateRating} / 10`
+                        : reviews.length > 0
+                        ? `${(reviews.reduce((a, b) => a + b.rating, 0) / reviews.length).toFixed(1)} / 10`
+                        : "Verified Listing"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-600">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Institution Type</div>
+                    <div className="text-sm font-extrabold text-slate-800 capitalize">
+                      {formatCollegeTypeString(selectedCollege.collegeType)}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {selectedCollege.backgroundImage && (
@@ -336,7 +422,7 @@ const CollegeDetail = () => {
               <div className="mt-6 grid gap-3 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
                 <p>
                   <span className="font-bold text-ink">Full address:</span>{" "}
-                  {selectedCollege.address.full ?? "Not available"}
+                  {fullAddress ?? "Not available"}
                 </p>
                 <p>
                   <span className="font-bold text-ink">Short description:</span>{" "}
@@ -351,13 +437,33 @@ const CollegeDetail = () => {
               )}
             </div>
 
+            {/* Campus Facilities Section */}
+            {facilities.length > 0 && (
+              <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+                <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-400">
+                  Campus Facilities & Amenities
+                </h3>
+                <div className="mt-5 flex flex-wrap gap-2.5">
+                  {facilities.map((facility) => (
+                    <div
+                      key={facility}
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-2 text-xs font-bold text-emerald-800"
+                    >
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      <span>{facility}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
               <h3 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-400">
                 Courses Offered
               </h3>
               <div className="mt-6 space-y-6">
-                {Object.entries(selectedCollege.coursesByCategory).length > 0 ? (
-                  Object.entries(selectedCollege.coursesByCategory).map(([category, courses]) => (
+                {Object.entries(coursesByCategory).length > 0 ? (
+                  Object.entries(coursesByCategory).map(([category, courses]) => (
                     <div key={category}>
                       <h4 className="text-sm font-bold uppercase tracking-[0.12em] text-emerald-700">
                         {category}
@@ -386,8 +492,8 @@ const CollegeDetail = () => {
                 Student Reviews
               </h3>
               <div className="mt-6 space-y-4">
-                {selectedCollege.reviews.length > 0 ? (
-                  selectedCollege.reviews.map((review, index) => (
+                {reviews.length > 0 ? (
+                  reviews.map((review, index) => (
                     <div
                       key={`${review.comment}-${index}`}
                       className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-700"
@@ -410,7 +516,7 @@ const CollegeDetail = () => {
             {/* ── SEO: FAQ section ── */}
             {(() => {
               const currentCourse =
-                Object.keys(selectedCollege.coursesByCategory)[0] ??
+                Object.keys(coursesByCategory)[0] ??
                 useHomeStore.getState().filters.course ??
                 "Engineering";
               return (
@@ -423,6 +529,15 @@ const CollegeDetail = () => {
                     college={selectedCollege}
                     currentCourse={currentCourse}
                   />
+                  <RecommendationSection
+                    colleges={suggestions}
+                    excludeCollegeName={selectedCollege.name}
+                    course={currentCourse}
+                    city={selectedCollege.address?.city ?? ""}
+                    state={selectedCollege.address?.state ?? ""}
+                    title="You Might Also Like"
+                    subtitle="Similar colleges, nearby cities and related courses to help you explore more options."
+                  />
                 </>
               );
             })()}
@@ -433,5 +548,12 @@ const CollegeDetail = () => {
   );
 };
 
-export default CollegeDetail;
+export default function CollegeDetail() {
+  return (
+    <ErrorBoundary>
+      <CollegeDetailContent />
+    </ErrorBoundary>
+  );
+}
+
 

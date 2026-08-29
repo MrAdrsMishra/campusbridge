@@ -2,8 +2,6 @@ import React, { useMemo, useState } from "react";
 import {
   Building2,
   Check,
-  Download,
-  MapPin,
   Star,
   TrendingUp,
 } from "lucide-react";
@@ -136,7 +134,7 @@ export function CollegesListTable({ colleges, loading, activeCategory, onOpenCol
                   <button onClick={() => onOpenCollege(college)} className="flex items-center gap-3 text-left">
                     <span className="grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-mint text-emerald-800">
                       {college.logo ? (
-                        <img src={formatImageUrl(college.logo) || ""} alt={college.name} className="h-full w-full object-cover" />
+                        <img src={formatImageUrl(college.logo) || ""} alt={`${college.name} Logo`} loading="lazy" className="h-full w-full object-cover" />
                       ) : (
                         <Building2 size={22} />
                       )}
@@ -184,94 +182,73 @@ export function CollegesListTable({ colleges, loading, activeCategory, onOpenCol
         </table>
       </div>
 
-      {/* ==== Mobile Cards View (< md: 768px) - College360 Inspired Card Layout ==== */}
-      <div className="space-y-3.5 md:hidden">
-        {ranked.map(({ college, meta }) => (
-          <article
-            key={collegeKey(college)}
-            className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-emerald-950/5 transition hover:border-emerald-300"
-          >
-            {/* Header: Rank + Logo + Title + Rating */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3 min-w-0">
-                {/* Logo with Rank overlay */}
-                <div className="relative shrink-0">
-                  <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl border border-slate-100 bg-mint text-emerald-800">
-                    {college.logo ? (
-                      <img src={formatImageUrl(college.logo) || ""} alt={college.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <Building2 size={22} />
-                    )}
-                  </span>
-                  <span className={`absolute -top-1.5 -left-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold shadow-xs ${rankBadgeClass(meta.rank)}`}>
-                    #{meta.rank}
-                  </span>
-                </div>
-
-                {/* College Title */}
-                <div className="min-w-0 flex-1">
-                  <button
-                    onClick={() => onOpenCollege(college)}
-                    className="text-left font-extrabold text-ink text-sm leading-snug hover:text-emerald-700 transition line-clamp-2"
-                  >
-                    {college.name}
-                  </button>
-                  <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                    <MapPin size={12} className="shrink-0 text-emerald-600" />
-                    <span className="truncate">India</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Rating pill */}
-              <div className="shrink-0 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 border border-amber-200/70">
-                <Star size={12} fill="currentColor" className="text-amber-500" />
-                <span className="text-xs font-bold text-amber-700">{meta.rating}</span>
-                <span className="text-[10px] text-slate-400">({meta.reviewsCount})</span>
-              </div>
-            </div>
-
-            {/* Middle Details Grid */}
-            <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50/80 p-2.5 text-xs border border-slate-100">
-              <div>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Fees</span>
-                <span className="font-extrabold text-ink text-xs sm:text-sm">{feeLabel(college, meta.fee)}</span>
-              </div>
-
-              <div>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Placements</span>
-                <span className="font-bold text-emerald-700 flex items-center gap-1 text-xs">
-                  <TrendingUp size={12} /> {meta.placement} rate
+      {/* ==== Mobile List View (< md: 768px) - compact table-style rows ==== */}
+      <div className="md:hidden overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl shadow-emerald-950/5">
+        <ul className="divide-y divide-slate-100">
+          {ranked.map(({ college, meta }) => (
+            <li key={collegeKey(college)} className="flex items-center gap-2.5 px-3 py-3">
+              {/* Rank + Rating + Placement (mirrors desktop Rank & Rating column) */}
+              <div className="w-10 shrink-0 text-center">
+                <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${rankBadgeClass(meta.rank)}`}>
+                  #{meta.rank}
                 </span>
+                <p className="mt-1 flex items-center justify-center gap-0.5 text-[10px] font-bold text-amber-500">
+                  <Star size={10} fill="currentColor" className="shrink-0 text-amber-500" />
+                  {meta.rating}
+                  <span className="font-medium text-slate-400">({meta.reviewsCount})</span>
+                </p>
+                <p className="mt-0.5 flex items-center justify-center gap-0.5 text-[10px] font-semibold text-emerald-700">
+                  <TrendingUp size={10} className="shrink-0" /> {meta.placement}%
+                </p>
               </div>
 
-              {meta.exams.length > 0 && (
-                <div className="col-span-2 pt-1 border-t border-slate-200/50">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Accepted Exam &amp; Cutoff</span>
-                  <span className="font-semibold text-slate-700 text-xs">
-                    {meta.exams[0].name}: <span className="font-bold text-emerald-700">{meta.exams[0].cutoff}</span>
-                  </span>
-                </div>
-              )}
-            </div>
+              {/* Logo */}
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-100 bg-mint text-emerald-800">
+                {college.logo ? (
+                  <img src={formatImageUrl(college.logo) || ""} alt={college.name} loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <Building2 size={18} />
+                )}
+              </span>
 
-            {/* Action Buttons */}
-            <div className="mt-3.5 flex items-center gap-2.5 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => onOpenCollege(college)}
-                className="flex-1 rounded-xl border border-emerald-600 bg-emerald-50 py-2.5 text-xs font-extrabold text-emerald-700 transition active:scale-95 hover:bg-emerald-100 text-center"
-              >
-                View Details
-              </button>
-              <button
-                onClick={() => useCounselorPopupStore.getState().open(college.name)}
-                className="flex-1 rounded-xl bg-ink py-2.5 text-xs font-extrabold text-white transition active:scale-95 hover:bg-emerald-950 text-center shadow-xs"
-              >
-                Apply Now
-              </button>
-            </div>
-          </article>
-        ))}
+              {/* College name + fees / exam meta */}
+              <div className="min-w-0 flex-1">
+                <button
+                  onClick={() => onOpenCollege(college)}
+                  className="block w-full truncate text-left text-[13px] font-extrabold leading-snug text-ink hover:text-emerald-700 transition"
+                >
+                  {college.name}
+                </button>
+                <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">
+                  <span className="font-extrabold text-emerald-700">{feeLabel(college, meta.fee)}</span>
+                  {meta.exams.length > 0 && (
+                    <>
+                      {" · "}
+                      {meta.exams[0].name}
+                      <span className="font-bold text-ink">: {meta.exams[0].cutoff}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="shrink-0 space-y-1.5">
+                <button
+                  onClick={() => onOpenCollege(college)}
+                  className="block w-full whitespace-nowrap rounded-lg border border-emerald-600 bg-emerald-50 px-1 py-0.5 text-center text-[8px] font-extrabold text-emerald-700 transition active:scale-95"
+                >
+                  Details
+                </button>
+                <button
+                  onClick={() => useCounselorPopupStore.getState().open(college.name)}
+                  className="block w-full whitespace-nowrap rounded-lg bg-ink px-1 py-0.5 text-center text-[8px] font-extrabold text-white transition active:scale-95 shadow-xs"
+                >
+                  Apply
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* Toast Notification */}

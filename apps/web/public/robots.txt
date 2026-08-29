@@ -1,0 +1,27 @@
+# Robots.txt for NextEduWise Discovery Platform
+User-agent: *
+Allow: /
+Allow: /colleges
+Allow: /colleges/*
+Allow: /courses
+Allow: /courses/*
+Allow: /engineering-colleges/*
+Allow: /mba-colleges/*
+Allow: /bba-colleges/*
+Allow: /medical-colleges/*
+Allow: /law-colleges/*
+Allow: /design-colleges/*
+Allow: /commerce-colleges/*
+Allow: /guides
+Allow: /guides/*
+
+# Disallow private user/admin routes and internal search parameters
+Disallow: /login
+Disallow: /dashboard
+Disallow: /seo-diagnostics
+Disallow: /*?*sort=
+Disallow: /*?*page=
+Disallow: /*?*search=
+
+# XML Sitemap Location
+Sitemap: https://nexteduwise.com/sitemap.xml

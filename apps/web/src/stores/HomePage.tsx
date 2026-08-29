@@ -22,7 +22,10 @@ import { LeadCapture } from "../components/landing/LeadCapture";
 import { Testimonials } from "../components/landing/Testimonials";
 import { CollegesListTable } from "../components/landing/CollegesListTable";
 import { HomeFaqSection } from "../components/landing/HomeFaqSection";
-import { normalizeCourseQuery, toCollegeSlug } from "../components/seoUtils";
+import { RecommendationSection } from "../components/RecommendationSection";
+import { normalizeCourseQuery, toCollegeSlug, generateWebSiteSchema, generateOrganizationSchema, getRobotsDirective } from "../components/seoUtils";
+import { SeoHead } from "../components/SeoHead";
+
 
 // Fallbacks for the initial load, used only until the user explicitly picks a
 // course/city. Kept small (5 each) and randomly chosen so every fresh visit
@@ -410,9 +413,19 @@ export default function HomePage() {
   };
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const hasQueryFilters = Boolean(searchParams.get("name") || searchParams.get("city") || searchParams.get("course"));
+
 
   return (
     <main className="min-h-screen bg-[#fbfcfa] text-ink">
+      <SeoHead
+        title="Find Top Colleges & Degree Programs in India | NextEduWise"
+        description="Discover top engineering, management, medical, law, bba and science colleges across India. Compare fees, courses, cutoff ranks, eligibility and placement reports."
+        canonicalUrl="/colleges"
+        robots={getRobotsDirective(hasQueryFilters)}
+        jsonLd={[generateWebSiteSchema(), generateOrganizationSchema()]}
+      />
+
       <nav className="relative z-30 mx-auto flex w-full items-center justify-between px-4 py-3.5 sm:px-6 sm:py-5 border-b border-slate-100/80 bg-white/90 backdrop-blur-md sticky top-0">
         <Link to="/" className="flex items-center gap-2 text-lg sm:text-xl font-extrabold shrink-0">
           <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-xl bg-ink text-lime">
@@ -428,6 +441,13 @@ export default function HomePage() {
             Find colleges
           </NavLink>
           <NavLink
+            to="/guides"
+            className="text-slate-700 hover:text-emerald-600 transition"
+          >
+            Guides & Articles
+          </NavLink>
+
+          <NavLink
             to={{ pathname: "/", hash: "courses" }}
             className="text-slate-700 hover:text-emerald-600 transition"
           >
@@ -439,9 +459,7 @@ export default function HomePage() {
           >
             How it works
           </NavLink>
-          <NavLink to="/dashboard" className="text-slate-700 hover:text-emerald-600 transition">
-            Counselor dashboard
-          </NavLink>
+        
           <NavLink to="/login" className="text-slate-700 hover:text-emerald-600 transition">
             Login
           </NavLink>
@@ -488,13 +506,7 @@ export default function HomePage() {
             >
               How it works
             </NavLink>
-            <NavLink
-              to="/dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-700"
-            >
-              Counselor dashboard
-            </NavLink>
+             
             <NavLink
               to="/login"
               onClick={() => setMobileMenuOpen(false)}
@@ -551,7 +563,17 @@ export default function HomePage() {
         onOpenCollege={openCollege}
       />
 
-      <CourseCategories onSelect={applyCategory} onExplore={onExplore} />
+      {/* Tabular Recommendation Section: Cities, Colleges, Courses */}
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 py-6">
+        <RecommendationSection
+          currentCourse={filters.course || "Engineering"}
+          currentCity={filters.city || "Bhopal"}
+          title="Explore Top Educational Hubs & Programs"
+          subtitle="Interactive directory: filter colleges, cities, and degree programs for your 2026 admissions."
+        />
+      </div>
+
+      <CourseCategories onExplore={onExplore} />
 
       <HowItWorks />
 

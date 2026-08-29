@@ -7,6 +7,7 @@ import { LeadPanel } from "../components/Modals";
 import { useApiStore } from "../stores/apiStore";
 import { useDashboardStore } from "../stores/dashboardStore";
 import { LeadStatus } from "../components/LeadStatus";
+import { SeoHead } from "../components/SeoHead";
 
 export default function DashboardPage() {
   const { leads, activeLead: active, saving, setLeads, setActiveLead, setSaving, replaceLead } = useDashboardStore();
@@ -82,8 +83,13 @@ export default function DashboardPage() {
   const awaiting = leads.filter((lead) => lead.contacted !== "yes").length;
   const ready = leads.filter((lead) => lead.interest === "ready").length;
 
-  return (
-    <main className="min-h-screen bg-slate-50 text-ink">
+return (
+     <main className="min-h-screen bg-slate-50 text-ink">
+       <SeoHead
+         title="Counselor Dashboard | NextEduWise"
+         description="Secure counselor dashboard for managing student leads, tracking admissions, and providing personalized guidance."
+         robots="noindex, follow"
+       />
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <Link to="/" className="flex items-center gap-2 text-xl font-extrabold">

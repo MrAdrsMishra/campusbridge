@@ -95,17 +95,20 @@ export interface FaqItem {
  * naturally-worded, unique questions.
  */
 export function generateFaqs(college: CollegeDetailView, currentCourse: string): FaqItem[] {
+  if (!college || !college.name) return [];
   const name = college.name;
-  const city = college.address.city ?? "India";
-  const state = college.address.state ?? "";
+  const city = college.address?.city ?? "India";
+  const state = college.address?.state ?? "";
   const location = state ? `${city}, ${state}` : city;
 
   // Derive course + category context from the college's actual data
-  const allCategories = Object.keys(college.coursesByCategory);
+  const coursesByCategory = college.coursesByCategory ?? {};
+  const allCategories = Object.keys(coursesByCategory);
   const primaryCategory = allCategories[0] ?? currentCourse ?? "various programs";
-  const allCourses = Object.values(college.coursesByCategory)
+  const allCourses = Object.values(coursesByCategory)
     .flat()
-    .map((c) => c.shortForm ?? c.name)
+    .map((c) => c?.shortForm ?? c?.name)
+    .filter((c): c is string => Boolean(c))
     .slice(0, 5);
   const courseList = allCourses.length > 0 ? allCourses.join(", ") : "B.Tech, MBA and more";
   const primaryCourse = allCourses[0] ?? currentCourse ?? "undergraduate programs";
@@ -338,6 +341,7 @@ export function normalizeCourseQuery(input?: string | null): string {
   }
 
   // Regex fallback rules
+  if (/political science|social science/i.test(cleaned)) return "Arts";
   if (/engineering/i.test(cleaned)) return "Engineering";
   if (/management|mba|bba/i.test(cleaned)) return "Management";
   if (/medical|medicine|mbbs/i.test(cleaned)) return "Medical";
@@ -382,17 +386,86 @@ const RELATED_COURSES: Record<string, string[]> = {
   PhD: ["Science", "Engineering", "Management"],
 };
 
-/** Build a `/colleges?course=X&city=Y` URL. */
-function toCollegesUrl(course: string, city: string): string {
-  const params = new URLSearchParams({ course, city });
-  return `/colleges?${params.toString()}`;
+/** Fast, clean slugifier for URLs */
+export function slugify(s: string): string {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** Build clean human-readable SEO URLs for course & city combinations */
+export function toCollegesUrl(course: string, city: string): string {
+  const citySlug = slugify(city);
+  const courseSlug = slugify(course);
+  const normCategory = course.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (!citySlug && !courseSlug) return "/colleges";
+  if (!citySlug) return `/courses/${courseSlug}`;
+  if (!courseSlug) return `/colleges/${citySlug}`;
+
+  // Must precede the management check: "hotel management" contains "management".
+  if (normCategory.includes("hotel") || normCategory.includes("hospitality")) {
+    return `/hotel-management-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("engineering") || normCategory.includes("btech")) {
+    return `/engineering-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("bca")) {
+    return `/bca-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("mca")) {
+    return `/mca-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("management") || normCategory.includes("mba")) {
+    return `/mba-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("bba")) {
+    return `/bba-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("medical") || normCategory.includes("mbbs")) {
+    return `/medical-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("pharmacy") || normCategory.includes("bpharma")) {
+    return `/pharmacy-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("nursing")) {
+    return `/nursing-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("law") || normCategory.includes("llb")) {
+    return `/law-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("design") || normCategory.includes("bdes")) {
+    return `/design-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("commerce") || normCategory.includes("bcom")) {
+    return `/commerce-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("architecture") || normCategory.includes("barch")) {
+    return `/architecture-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("agriculture")) {
+    return `/agriculture-colleges/${citySlug}`;
+  }
+  if (normCategory.includes("bed")) {
+    return `/bed-colleges/${citySlug}`;
+  }
+
+  // Clean fallback pattern matching the dynamic wildcard route in App.tsx
+  return `/${courseSlug}-colleges/${citySlug}`;
 }
 
 /**
  * Generate 6–10 related internal links for a college detail page.
  *
  * Strategy:
- *  1. Same course, top 3 other popular cities (excluding current city)
+ *  1. Same course, top 4 other popular cities (excluding current city)
  *  2. Same city, 2–3 related courses
  *  3. "Private" qualifier for current course + city
  *  4. "Government" qualifier for current course + current state city
@@ -403,8 +476,9 @@ export function generateRelatedLinks(
   college: CollegeDetailView,
   currentCourse: string,
 ): RelatedLink[] {
-  const city = (college.address.city ?? "").trim();
-  const state = (college.address.state ?? "").trim();
+  if (!college) return [];
+  const city = (college.address?.city ?? "").trim();
+  const state = (college.address?.state ?? "").trim();
   const rawCourse = currentCourse || "Engineering";
   const course = normalizeCourseQuery(rawCourse);
 
@@ -474,7 +548,594 @@ export function generateRelatedLinks(
     }
   }
 
-  // Cap at 10 links
+// Cap at 10 links
   return links.slice(0, 10);
 }
+
+// ===========================================================
+// Recommendation Engine for Colleges, Courses & Cities
+// ===========================================================
+
+export interface RecommendationItem {
+  label: string;
+  href: string;
+  type: "college" | "course" | "city";
+  priority: number;
+}
+
+interface RecommendationOptions {
+  course?: string;
+  city?: string;
+  state?: string;
+  colleges?: Array<{ name: string; city?: string | null; coursesByCategory?: Record<string, { name: string }[]> }>;
+  popularCities?: string[];
+  maxItems?: number;
+  /** College name to exclude from "similar colleges" (e.g. the college already being viewed). */
+  excludeCollegeName?: string;
+}
+
+const DEFAULT_POPULAR_CITIES = [
+  "Bhopal",
+  "Indore",
+  "Pune",
+  "Mumbai",
+  "Delhi",
+  "Bangalore",
+  "Hyderabad",
+  "Jaipur",
+  "Chennai",
+  "Kolkata",
+  "Ahmedabad",
+  "Lucknow",
+  "Chandigarh",
+];
+
+const COURSE_ALIASES: Record<string, string[]> = {
+  Engineering: ["B.Tech", "M.Tech", "B.E", "M.E", "Computer Applications", "Science"],
+  "Computer Applications": ["BCA", "MCA", "Engineering", "IT"],
+  Management: ["MBA", "BBA", "PGDM", "Commerce"],
+  Medical: ["MBBS", "Pharmacy", "Paramedical", "Nursing"],
+  Science: ["B.Sc", "M.Sc", "Engineering", "Medical"],
+  Commerce: ["B.Com", "M.Com", "Management", "MBA"],
+  Law: ["LLB", "BA LLB", "BBA LLB", "Arts"],
+  Design: ["B.Des", "M.Des", "Architecture", "Arts"],
+  Architecture: ["B.Arch", "M.Arch", "Design", "Planning"],
+  Arts: ["BA", "MA", "Law", "Education"],
+  Education: ["B.Ed", "M.Ed", "Arts", "Science"],
+  Pharmacy: ["B.Pharm", "M.Pharm", "Medical", "Paramedical"],
+  Paramedical: ["BPT", "BMLT", "Nursing", "Pharmacy"],
+};
+
+const CITY_PROXIMITY: Record<string, string[]> = {
+  Bhopal: ["Indore", "Jabalpur", "Gwalior"],
+  Indore: ["Bhopal", "Ujjain", "Khandwa"],
+  Pune: ["Mumbai", "Nashik", "Ahmednagar"],
+  Mumbai: ["Pune", "Thane", "Navi Mumbai"],
+  Delhi: ["Noida", "Gurgaon", "Faridabad", "Ghaziabad"],
+  Bangalore: ["Mysore", "Hubli", "Mangalore"],
+  Hyderabad: ["Secunderabad", "Warangal", "Nizamabad"],
+  Chennai: ["Coimbatore", "Madurai", "Trichy"],
+  Kolkata: ["Howrah", "Durgapur", "Siliguri"],
+  Ahmedabad: ["Gandhinagar", "Surat", "Vadodara"],
+  Lucknow: ["Kanpur", "Agra", "Varanasi"],
+  Chandigarh: ["Mohali", "Panchkula", "Ludhiana"],
+};
+
+/** Canonical course categories used to compute "similar courses" recommendations. */
+const ALL_COURSE_CATEGORIES = [
+  "Engineering",
+  "Management",
+  "Medical",
+  "Law",
+  "Design",
+  "Commerce",
+  "Science",
+  "Arts",
+  "Education",
+  "Pharmacy",
+  "Paramedical",
+  "Architecture",
+  "Computer Applications",
+];
+
+/**
+ * Suggest up to `count` genuinely different course categories for a given course.
+ * `normalizeCourse` collapses aliases (B.Tech/M.E → Engineering), so we normalize
+ * before comparing to avoid recommending the same category the user already picked.
+ */
+function relatedCourseCategories(course: string, count = 3): string[] {
+  const normalized = normalizeCourse(course);
+  const fromAliases = (COURSE_ALIASES[normalized] ?? [])
+    .map((alias) => normalizeCourse(alias))
+    .filter((aliasCat) => aliasCat !== normalized);
+  const fromAll = ALL_COURSE_CATEGORIES.filter((cat) => cat !== normalized);
+  const combined = [...new Set([...fromAliases, ...fromAll])];
+  return combined.slice(0, count);
+}
+
+function normalizeCourse(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "Engineering";
+
+  const lower = trimmed.toLowerCase();
+  if (/engineering|b\.?tech|b\.?e|m\.?tech/i.test(lower)) return "Engineering";
+  if (/management|mba|pgdm|bba/i.test(lower)) return "Management";
+  if (/medical|mbbs|md|ms/i.test(lower)) return "Medical";
+  if (/computer|bca|mca|it|information technology/i.test(lower)) return "Computer Applications";
+  if (/science|b\.?sc|m\.?sc/i.test(lower)) return "Science";
+  if (/commerce|b\.?com|m\.?com/i.test(lower)) return "Commerce";
+  if (/law|llb|ba llb|bba llb/i.test(lower)) return "Law";
+  if (/design|b\.?des|m\.?des/i.test(lower)) return "Design";
+  if (/architecture|b\.?arch|m\.?arch|planning/i.test(lower)) return "Architecture";
+  if (/arts|humanities|ba|ma/i.test(lower)) return "Arts";
+  if (/education|b\.?ed|m\.?ed|teaching/i.test(lower)) return "Education";
+  if (/pharmacy|b\.?pharm|m\.?pharm|d\.?pharm/i.test(lower)) return "Pharmacy";
+  if (/paramedical|nursing|bpt|bmlt|physiotherapy/i.test(lower)) return "Paramedical";
+  if (/vocational|skill|diploma/i.test(lower)) return "Vocational";
+
+  if (COURSE_ALIASES[trimmed]) return trimmed;
+  if (lower.includes("engineering")) return "Engineering";
+  if (lower.includes("management") || lower.includes("mba")) return "Management";
+  if (lower.includes("medical")) return "Medical";
+  if (lower.includes("computer") || lower.includes("bca") || lower.includes("mca")) return "Computer Applications";
+  if (lower.includes("science")) return "Science";
+  if (lower.includes("commerce")) return "Commerce";
+  if (lower.includes("law")) return "Law";
+  if (lower.includes("design")) return "Design";
+  if (lower.includes("arts") || lower.includes("humanities")) return "Arts";
+
+  return trimmed || "Engineering";
+}
+
+function toCourseSlug(course: string): string {
+  const normalized = normalizeCourse(course);
+  const map: Record<string, string> = {
+    Engineering: "engineering",
+    Management: "mba",
+    "Computer Applications": "bca",
+    Medical: "medical",
+    Science: "science",
+    Commerce: "commerce",
+    Law: "law",
+    Design: "design",
+    Architecture: "architecture",
+    Arts: "arts",
+    Education: "education",
+    Pharmacy: "pharmacy",
+    Paramedical: "paramedical",
+    Vocational: "vocational",
+  };
+  return map[normalized] || slugify(normalized);
+}
+
+function pickUnique<T>(items: T[], max: number): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    const key = typeof item === "string" ? item : JSON.stringify(item);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(item);
+      if (result.length >= max) break;
+    }
+  }
+  return result;
+}
+
+/**
+ * Generate fallback recommendations when no specific college data is available.
+ * These are generic but SEO-friendly links based on course/city patterns.
+ */
+function generateFallbackRecommendations(options: RecommendationOptions): RecommendationItem[] {
+  const { course = "", city = "", maxItems = 12 } = options;
+  const normalizedCourse = normalizeCourse(course);
+  const recommendations: RecommendationItem[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, href: string, type: RecommendationItem["type"], priority: number) => {
+    const key = `${type}:${href}`;
+    if (!seen.has(key) && href) {
+      seen.add(key);
+      recommendations.push({ label, href, type, priority });
+    }
+  };
+
+  const courseCities = [
+    ...DEFAULT_POPULAR_CITIES,
+  ];
+
+  const relatedCourses = relatedCourseCategories(normalizedCourse, 3);
+
+  if (city) {
+    const cityLower = city.toLowerCase();
+    const nearbyCities =
+      CITY_PROXIMITY[city]?.filter((c) => c.toLowerCase() !== cityLower) ?? [];
+
+    for (const nearby of nearbyCities.slice(0, 3)) {
+      add(
+        `Top ${normalizedCourse} Colleges in ${nearby}`,
+        toCollegesUrl(normalizedCourse, nearby),
+        "city",
+        2,
+      );
+    }
+
+    for (const relCourse of relatedCourses) {
+      add(
+        `Top ${relCourse} Colleges in ${city}`,
+        toCollegesUrl(relCourse, city),
+        "course",
+        3,
+      );
+    }
+  }
+
+  for (const popularCity of courseCities.slice(0, 4)) {
+    if (city && popularCity.toLowerCase() === city.toLowerCase()) continue;
+    add(
+      `Top ${normalizedCourse} Colleges in ${popularCity}`,
+      toCollegesUrl(normalizedCourse, popularCity),
+      "city",
+      4,
+    );
+  }
+
+  for (const relCourse of relatedCourses) {
+    add(`Top ${relCourse} Colleges in India`, `/courses/${toCourseSlug(relCourse)}`, "course", 5);
+  }
+
+  return recommendations.slice(0, maxItems);
+}
+
+/**
+ * Generate recommendations from actual college data.
+ * Extracts patterns from the college list to suggest similar colleges, nearby cities, and related courses.
+ */
+export function generateRecommendations(options: RecommendationOptions): RecommendationItem[] {
+  const {
+    course = "",
+    city = "",
+    state = "",
+    excludeCollegeName = "",
+    colleges = [],
+    popularCities = DEFAULT_POPULAR_CITIES,
+    maxItems = 12,
+  } = options;
+
+  const recommendations: RecommendationItem[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, href: string, type: RecommendationItem["type"], priority: number) => {
+    const key = `${type}:${href}`;
+    if (!seen.has(key) && href) {
+      seen.add(key);
+      recommendations.push({ label, href, type, priority });
+    }
+  };
+
+  const normalizedCourse = normalizeCourse(course);
+  const cityLower = city.toLowerCase();
+  const currentState = state.trim();
+
+  // Extract data from available colleges
+  const citiesFromColleges = new Set<string>();
+  const coursesFromColleges = new Set<string>();
+  const collegeNames = new Set<string>();
+
+  for (const college of colleges) {
+    if (college.name) collegeNames.add(college.name.trim());
+    if (college.city) citiesFromColleges.add(college.city.trim());
+    if (college.coursesByCategory) {
+      for (const courses of Object.values(college.coursesByCategory)) {
+        for (const c of courses) {
+          if (c.name) coursesFromColleges.add(c.name.trim());
+        }
+      }
+    }
+  }
+
+  // --- 0. Similar colleges → deep links to real college detail pages ---
+  // The colleges found by the current search are turned into direct internal
+  // links (`/college-detail/<name-city>`), so a click lands on a real college
+  // page instead of a generic category listing. Same-city colleges rank first,
+  // the currently-viewed college (excludeCollegeName) is skipped, and identical
+  // slugs are de-duplicated so each unique college is suggested once.
+  const excludeName = excludeCollegeName.trim().toLowerCase();
+  const realCollegeSlugs = new Set<string>();
+  let realCollegeCount = 0;
+
+  for (const college of colleges) {
+    const collegeName = (college.name ?? "").trim();
+    if (!collegeName) continue;
+    if (excludeName && collegeName.toLowerCase() === excludeName) continue;
+
+    const collegeCity = (college.city ?? city ?? "").trim();
+    const collegeUrlSlug = toCollegeSlug(collegeName, collegeCity || null);
+    const slugKey = collegeUrlSlug.toLowerCase();
+    if (!collegeUrlSlug || realCollegeSlugs.has(slugKey)) continue;
+    realCollegeSlugs.add(slugKey);
+
+    const sameCity =
+      Boolean(collegeCity) && collegeCity.toLowerCase() === cityLower;
+    add(collegeName, `/college-detail/${collegeUrlSlug}`, "college", sameCity ? 1 : 2);
+    realCollegeCount += 1;
+    if (realCollegeCount >= 6) break;
+  }
+
+  // --- 1. Similar colleges from the same course in nearby/popular cities ---
+  const nearbyCities = new Set<string>();
+  if (city) {
+    const proximityList = CITY_PROXIMITY[city] ?? [];
+    for (const nearby of proximityList) {
+      if (nearby.toLowerCase() !== cityLower) nearbyCities.add(nearby);
+    }
+  }
+
+  for (const popularCity of popularCities) {
+    if (popularCity.toLowerCase() !== cityLower) nearbyCities.add(popularCity);
+  }
+
+  const uniqueNearbyCities = pickUnique([...nearbyCities], 5);
+  for (const nearbyCity of uniqueNearbyCities) {
+    add(
+      `Top ${normalizedCourse} Colleges in ${nearbyCity}`,
+      toCollegesUrl(normalizedCourse, nearbyCity),
+      "city",
+      1,
+    );
+  }
+
+  // --- 2. Related courses in the same city ---
+  if (city) {
+    for (const relCourse of relatedCourseCategories(normalizedCourse)) {
+      add(
+        `Top ${relCourse} Colleges in ${city}`,
+        toCollegesUrl(relCourse, city),
+        "course",
+        2,
+      );
+    }
+
+    add(`Private ${normalizedCourse} Colleges in ${city}`, toCollegesUrl(normalizedCourse, city), "college", 3);
+    add(`Government ${normalizedCourse} Colleges in ${city}`, toCollegesUrl(normalizedCourse, city), "college", 4);
+
+    // Nearby cities from actual data
+    const citiesFromData = pickUnique([...citiesFromColleges].filter((c) => c.toLowerCase() !== cityLower), 3);
+    for (const nearbyCity of citiesFromData) {
+      add(
+        `Top ${normalizedCourse} Colleges in ${nearbyCity}`,
+        toCollegesUrl(normalizedCourse, nearbyCity),
+        "city",
+        5,
+      );
+    }
+  }
+
+  // --- 3. State-level recommendations if state is known ---
+  if (currentState) {
+    const stateCapitals: Record<string, string> = {
+      "Madhya Pradesh": "Bhopal",
+      Maharashtra: "Mumbai",
+      "Uttar Pradesh": "Lucknow",
+      Rajasthan: "Jaipur",
+      Karnataka: "Bangalore",
+      "Tamil Nadu": "Chennai",
+      Gujarat: "Ahmedabad",
+      Delhi: "Delhi",
+      Punjab: "Chandigarh",
+      Haryana: "Chandigarh",
+      "West Bengal": "Kolkata",
+      Telangana: "Hyderabad",
+      "Andhra Pradesh": "Hyderabad",
+      Kerala: "Thiruvananthapuram",
+    };
+
+    const capital = stateCapitals[currentState];
+    if (capital && capital.toLowerCase() !== cityLower) {
+      add(
+        `Top ${normalizedCourse} Colleges in ${capital}`,
+        toCollegesUrl(normalizedCourse, capital),
+        "city",
+        6,
+      );
+    }
+  }
+
+  // --- 4. Course-only fallback recommendations ---
+  for (const relCourse of relatedCourseCategories(normalizedCourse)) {
+    add(`Top ${relCourse} Colleges in India`, `/courses/${toCourseSlug(relCourse)}`, "course", 7);
+  }
+
+  // --- 5. If no specific recommendations, use fallback ---
+  if (recommendations.length === 0) {
+    const fallback = generateFallbackRecommendations({ course: normalizedCourse, city, maxItems });
+    return fallback;
+  }
+
+  const sorted = recommendations.sort((a, b) => a.priority - b.priority);
+  return sorted.slice(0, maxItems);
+}
+
+/**
+ * Generate simple fallback recommendations specifically for homepage/empty states.
+ */
+export function generateHomepageRecommendations(course: string = "Engineering", city: string = ""): RecommendationItem[] {
+  const normalizedCourse = normalizeCourse(course);
+  const recommendations: RecommendationItem[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, href: string, type: RecommendationItem["type"], priority: number) => {
+    const key = `${type}:${href}`;
+    if (!seen.has(key) && href) {
+      seen.add(key);
+      recommendations.push({ label, href, type, priority });
+    }
+  };
+
+  const popularCities = DEFAULT_POPULAR_CITIES.slice(0, 6);
+
+  for (const popCity of popularCities) {
+    add(
+      `Top ${normalizedCourse} Colleges in ${popCity}`,
+      toCollegesUrl(normalizedCourse, popCity),
+      "city",
+      1,
+    );
+  }
+
+  const relatedCourses = relatedCourseCategories(normalizedCourse, 4);
+  for (const relCourse of relatedCourses) {
+    add(`Top ${relCourse} Colleges in India`, `/courses/${toCourseSlug(relCourse)}`, "course", 2);
+  }
+
+  if (city) {
+    const nearbyCities = CITY_PROXIMITY[city]?.slice(0, 3) ?? [];
+    for (const nearbyCity of nearbyCities) {
+      add(
+        `Top ${normalizedCourse} Colleges in ${nearbyCity}`,
+        toCollegesUrl(normalizedCourse, nearbyCity),
+        "city",
+        3,
+      );
+    }
+  }
+
+  return recommendations.slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// Schema.org JSON-LD Generators
+// ---------------------------------------------------------------------------
+
+export interface BreadcrumbItem {
+  name: string;
+  url: string;
+}
+
+export function generateBreadcrumbSchema(items: BreadcrumbItem[], origin: string = "https://nexteduwise.com") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": items.map((item, idx) => ({
+      "@type": "ListItem",
+      "position": idx + 1,
+      "name": item.name,
+      "item": item.url.startsWith("http") ? item.url : `${origin}${item.url.startsWith("/") ? "" : "/"}${item.url}`,
+    })),
+  };
+}
+
+export function generateFAQSchema(faqs: FaqItem[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.map((faq) => ({
+      "@type": "Question",
+      "name": faq.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": faq.answer,
+      },
+    })),
+  };
+}
+
+export function generateCollegeSchema(college: CollegeDetailView, origin: string = "https://nexteduwise.com") {
+  if (!college) return {};
+  const city = college.address?.city ?? "";
+  const state = college.address?.state ?? "";
+  const slug = toCollegeSlug(college.name || "", city);
+
+  const schema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "EducationalOrganization",
+    "name": college.name || "College",
+    "description": `Detailed admissions, courses, fee structure, eligibility, and facilities for ${college.name || "this college"}${city ? ` in ${city}` : ""}.`,
+    "url": `${origin}/colleges/${slug}`,
+    "logo": college.logo ? (college.logo.startsWith("http") ? college.logo : `${origin}${college.logo}`) : undefined,
+    "image": college.backgroundImage ? (college.backgroundImage.startsWith("http") ? college.backgroundImage : `${origin}${college.backgroundImage}`) : undefined,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": college.address?.full || undefined,
+      "addressLocality": city || undefined,
+      "addressRegion": state || undefined,
+      "addressCountry": "IN",
+    },
+  };
+
+  if (college.aggregateRating || college.reviews?.length) {
+    const ratingVal = college.aggregateRating ?? (college.reviews?.length ? (college.reviews.reduce((acc, r) => acc + r.rating, 0) / college.reviews.length) : null);
+    if (ratingVal) {
+      schema["aggregateRating"] = {
+        "@type": "AggregateRating",
+        "ratingValue": ratingVal,
+        "bestRating": 10,
+        "worstRating": 1,
+        "ratingCount": college.reviews?.length || 1,
+      };
+    }
+  }
+
+  if (college.averageFees) {
+    schema["makesOffer"] = {
+      "@type": "Offer",
+      "price": college.averageFees,
+      "priceCurrency": "INR",
+      "description": `Average tuition fee for programs at ${college.name}`,
+    };
+  }
+
+  if (college.facilities && college.facilities.length > 0) {
+    schema["amenityFeature"] = college.facilities.map((facility) => ({
+      "@type": "LocationFeatureSpecification",
+      "name": facility,
+      "value": true,
+    }));
+  }
+
+  return schema;
+}
+
+
+export function generateWebSiteSchema(origin: string = "https://nexteduwise.com") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "NextEduWise",
+    "url": origin,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": `${origin}/colleges?name={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+}
+
+export function generateOrganizationSchema(origin: string = "https://nexteduwise.com") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "NextEduWise",
+    "url": origin,
+    "logo": `${origin}/favicon.ico`,
+    "sameAs": [],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "admissions counseling",
+      "availableLanguage": ["English", "Hindi"],
+    },
+  };
+}
+
+/** Faceted Search Robots Directive Guard */
+export function getRobotsDirective(isFilteredOrPaginated: boolean = false): string {
+  if (isFilteredOrPaginated) {
+    return "noindex, follow";
+  }
+  return "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
+}
+
 

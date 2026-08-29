@@ -36,6 +36,8 @@ export type CollegeListItem = {
   // Always returned by the backend for every search type; used for canonical
   // College360 name resolution (name + city strategy).
   city?: string | null;
+  collegeType?: string | null;
+  aggregateRating?: number | null;
 };
 
 export type CollegeSearchResponse = {
@@ -50,6 +52,8 @@ export type CollegePhoto = {
 };
 
 export type CollegeDetailView = {
+  slug?: string | null;
+  seriesId?: number | null;
   name: string;
   shortDescription: string | null;
   logo: string | null;
@@ -62,6 +66,10 @@ export type CollegeDetailView = {
   };
   coursesByCategory: Record<string, { name: string; shortForm: string | null }[]>;
   reviews: { rating: number; comment: string }[];
+  facilities?: string[];
+  averageFees?: number | null;
+  aggregateRating?: number | null;
+  collegeType?: string | null;
 };
 
 export type CitySuggestion = {

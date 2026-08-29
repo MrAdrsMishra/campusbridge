@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import { useApiStore } from "../stores/apiStore";
+import { SeoHead } from "../components/SeoHead";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -38,6 +39,11 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-[#f5f7f4] text-ink">
+      <SeoHead
+        title="Admin Login | NextEduWise"
+        description="Secure admin login to access the counselor dashboard for managing student leads and conversations."
+        robots="noindex, follow"
+      />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <Link to="/" className="flex items-center gap-2 text-xl font-extrabold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-lime">

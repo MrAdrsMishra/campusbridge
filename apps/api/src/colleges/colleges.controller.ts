@@ -21,7 +21,47 @@ import {
 export class CollegesController {
   constructor(private readonly service: CollegesService) {}
 
+  // Dynamic XML Sitemap Endpoint for Search Engine Crawlers
+  @Get("sitemap.xml")
+
+  @Header("Content-Type", "application/xml")
+  @Header("Cache-Control", "public, max-age=3600")
+  getSitemapXml() {
+    const origin = "https://nexteduwise.com";
+    const cities = ["bhopal", "indore", "pune", "mumbai", "delhi", "bangalore"];
+    const categories = ["engineering", "mba", "bba", "medical", "law"];
+
+    const cityUrls = cities.map((city) =>
+      categories.map((cat) => `
+  <url>
+    <loc>${origin}/${cat}-colleges/${city}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>`).join("")
+    ).join("");
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${origin}/colleges</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${origin}/guides</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>${cityUrls}
+</urlset>`;
+  }
+
   // Step 1 — Shiksha search, two modes:
+
   //   - college name  → returns the final CollegeListItem[] (all `institute` hits resolved).
   //   - course/category → returns the single { name, url } category for Step 2.
   @Get("search")

@@ -11,7 +11,7 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import Fuse from "fuse.js";
 import { Model } from "mongoose";
-import { College, CollegeDocument } from "./college.schema";
+import { College, CollegeDocument, Category, CategoryDocument } from "./college.schema";
 
 // ============================================================
 // Public-facing types
@@ -67,10 +67,13 @@ export type ScrapedCollegeResult = {
   photos: ScrapedCollegePhoto[];
   averageFees: number | null; // TODO: fee[] shape still unconfirmed
   aggregateRating: number | null;
+  collegeType?: string | null;
 };
 
 /** Trimmed view for the "user selected a college, show its detail page" screen. */
 export type CollegeDetailView = {
+  slug: string | null;
+  seriesId: number | null;
   name: string;
   shortDescription: string | null;
   logo: string | null;
@@ -86,6 +89,10 @@ export type CollegeDetailView = {
     { name: string; shortForm: string | null }[]
   >;
   reviews: { rating: number; comment: string }[];
+  facilities: string[];
+  averageFees: number | null;
+  aggregateRating: number | null;
+  collegeType: string | null;
 };
 
 // Shiksha autocomplete result — the frontend uses `url` for the next request.
@@ -108,6 +115,8 @@ export type CollegeListItem = {
   // City for this college, always stored on every search type (category list and
   // institute name search). Used for canonical College360 name resolution later.
   city: string | null;
+  collegeType?: string | null;
+  aggregateRating?: number | null;
 };
 
 // ============================================================
@@ -155,6 +164,7 @@ type College360DetailInfo = {
   facilitites?: College360Facility[]; // API's own typo — not fixing it, just matching it
   fee?: College360Fee[]; // TODO: shape unconfirmed
   aggregateRatingValue?: string;
+  type?: string[];
   seriesId: number;
   url: string;
 };
@@ -401,6 +411,8 @@ export class CollegesService implements OnModuleInit {
   constructor(
     @InjectModel(College.name)
     private readonly colleges: Model<CollegeDocument>,
+    @InjectModel(Category.name)
+    private readonly categoryModel: Model<CategoryDocument>,
   ) {}
 
   async onModuleInit() {
@@ -411,6 +423,35 @@ export class CollegesService implements OnModuleInit {
     // Bring existing documents in line with the current schema (new defaulted
     // fields, plus indexes for the resolution/search lookups).
     await this.runSchemaMigration();
+    await this.seedDefaultCategories();
+  }
+
+  private async seedDefaultCategories() {
+    try {
+      const count = await this.categoryModel.countDocuments();
+      if (count === 0) {
+        const defaults = [
+          { keyword: "engineering", name: "B.E. / B.Tech Colleges in India", url: "https://www.shiksha.com/engineering/colleges/btech-colleges-india", slug: "engineering", aliases: ["btech", "b.tech", "be", "engineering"] },
+          { keyword: "btech", name: "B.E. / B.Tech Colleges in India", url: "https://www.shiksha.com/engineering/colleges/btech-colleges-india", slug: "btech", aliases: ["btech", "b.tech", "be", "engineering"] },
+          { keyword: "mba", name: "MBA/PGDM Colleges in India", url: "https://www.shiksha.com/mba/colleges/mba-colleges-india", slug: "mba", aliases: ["mba", "pgdm", "management"] },
+          { keyword: "bba", name: "BBA Colleges in India", url: "https://www.shiksha.com/bba/colleges/bba-colleges-india", slug: "bba", aliases: ["bba", "management"] },
+          { keyword: "bca", name: "BCA Colleges in India", url: "https://www.shiksha.com/bca/colleges/bca-colleges-india", slug: "bca", aliases: ["bca", "computer applications"] },
+          { keyword: "mca", name: "MCA Colleges in India", url: "https://www.shiksha.com/mca/colleges/mca-colleges-india", slug: "mca", aliases: ["mca", "computer applications"] },
+          { keyword: "medical", name: "MBBS / Medical Colleges in India", url: "https://www.shiksha.com/medicine-health-sciences/colleges/mbbs-colleges-india", slug: "medical", aliases: ["medical", "mbbs", "medicine"] },
+          { keyword: "law", name: "Law Colleges in India", url: "https://www.shiksha.com/law/colleges/law-colleges-india", slug: "law", aliases: ["law", "llb", "ballb"] },
+          { keyword: "design", name: "Design Colleges in India", url: "https://www.shiksha.com/design/colleges/bdes-colleges-india", slug: "design", aliases: ["design", "bdes"] },
+          { keyword: "commerce", name: "Commerce / B.Com Colleges in India", url: "https://www.shiksha.com/accounting-commerce/colleges/bcom-colleges-india", slug: "commerce", aliases: ["commerce", "bcom"] },
+          { keyword: "pharmacy", name: "Pharmacy Colleges in India", url: "https://www.shiksha.com/pharmacy/colleges/b-pharma-colleges-india", slug: "pharmacy", aliases: ["pharmacy", "bpharma"] },
+          { keyword: "nursing", name: "Nursing Colleges in India", url: "https://www.shiksha.com/nursing/colleges/bsc-nursing-colleges-india", slug: "nursing", aliases: ["nursing", "bsc nursing"] },
+          { keyword: "architecture", name: "Architecture / B.Arch Colleges in India", url: "https://www.shiksha.com/architecture-planning/colleges/barch-colleges-india", slug: "architecture", aliases: ["architecture", "barch"] },
+          { keyword: "hotel management", name: "Hotel Management Colleges in India", url: "https://www.shiksha.com/hospitality-travel/colleges/hotel-management-colleges-india", slug: "hotel-management", aliases: ["hotel management", "hm", "hospitality"] },
+        ];
+        await this.categoryModel.insertMany(defaults);
+        this.logger.log("Seeded default course category slugs into MongoDB.");
+      }
+    } catch (err) {
+      this.logger.warn("Failed to seed default categories:", err);
+    }
   }
 
   /**
@@ -516,16 +557,41 @@ export class CollegesService implements OnModuleInit {
     city?: string,
     state?: string,
   ): Promise<ShikshaCategoryResult | CollegeListItem[]> {
-    const keyword = query.trim();
-    if (!keyword) {
+    const rawKeyword = query.trim();
+    if (!rawKeyword) {
       throw new BadRequestException("A search query is required.");
     }
 
-    const payload = { domain: "national", experiment: "", keyword };
+    const normalizedKeyword = rawKeyword.toLowerCase();
+    const cleanKeyword = this.normalizeCategoryKeyword(rawKeyword).toLowerCase();
+
+    // 1. DB LOOKUP FIRST FOR COURSE CATEGORY SLUGS & URLS
+    try {
+      const dbCategory = await this.categoryModel.findOne({
+        $or: [
+          { keyword: normalizedKeyword },
+          { keyword: cleanKeyword },
+          { slug: normalizedKeyword },
+          { slug: cleanKeyword },
+          { aliases: normalizedKeyword },
+          { aliases: cleanKeyword },
+        ],
+      });
+
+      if (dbCategory) {
+        this.logger.log(`[DB Category Hit] Found category in MongoDB for "${query}": ${dbCategory.name} (${dbCategory.slug})`);
+        return { name: dbCategory.name, url: dbCategory.url };
+      }
+    } catch (dbErr) {
+      this.logger.warn(`DB category lookup error for "${query}":`, dbErr);
+    }
+
+    // 2. SHIKSHA AUTOSUGGEST API FALLBACK
+    const payload = { domain: "national", experiment: "", keyword: rawKeyword };
     const url = `${SHIKSHA_AUTOSUGGEST_ENDPOINT}?data=${encodeURIComponent(
       Buffer.from(JSON.stringify(payload)).toString("base64"),
     )}`;
-  
+
     const raw = await this.fetchJson<ShikshaAutosuggestResponse>(url);
     if (!raw || raw.status !== "success" || !raw.data?.solrResults?.length) {
       throw new BadGatewayException(
@@ -535,9 +601,7 @@ export class CollegesService implements OnModuleInit {
 
     const results = raw.data.solrResults;
 
-    // College-name search: Shiksha leads with an exact `institute` hit. When that
-    // happens, resolve every institute directly via getInstituteData into the final
-    // CollegeListItem[] — no category-url hop needed.
+    // College-name search: Shiksha leads with an exact `institute` hit.
     const institutes = results.filter((r) => r.type === "institute" && r.url);
 
     if (results[0]?.type === "institute" && institutes.length > 0) {
@@ -553,10 +617,10 @@ export class CollegesService implements OnModuleInit {
       results.find((r) => r.url && this.isShikshaCategoryUrl(r.url));
     if (!relevant?.url) {
       const candidates = [
-        this.normalizeCategoryKeyword(keyword),
+        this.normalizeCategoryKeyword(rawKeyword),
         "BCA",
         "Engineering",
-      ].filter((k, idx, arr) => Boolean(k) && k !== keyword && arr.indexOf(k) === idx);
+      ].filter((k, idx, arr) => Boolean(k) && k !== rawKeyword && arr.indexOf(k) === idx);
 
       for (const alt of candidates) {
         try {
@@ -568,11 +632,49 @@ export class CollegesService implements OnModuleInit {
       }
 
       throw new NotFoundException(
-        `No matching category found for "${keyword}".`,
+        `No matching category found for "${rawKeyword}".`,
       );
     }
 
+    // 3. PERSIST NEW CATEGORY & DERIVED SLUG INTO MONGODB
+    const derivedSlug = this.deriveCategorySlug(relevant.name, relevant.url, rawKeyword);
+    try {
+      await this.categoryModel.updateOne(
+        { keyword: normalizedKeyword },
+        {
+          $set: {
+            keyword: normalizedKeyword,
+            name: relevant.name,
+            url: relevant.url,
+            slug: derivedSlug,
+            aliases: [normalizedKeyword, cleanKeyword, derivedSlug].filter(Boolean),
+          },
+        },
+        { upsert: true }
+      );
+      this.logger.log(`[DB Category Saved] Persisted category slug into MongoDB for "${query}" -> ${derivedSlug}`);
+    } catch (saveErr) {
+      this.logger.warn(`Failed to persist category slug for "${query}":`, saveErr);
+    }
+
     return { name: relevant.name, url: relevant.url };
+  }
+
+  private deriveCategorySlug(categoryName: string, categoryUrl: string, keyword: string): string {
+    const normUrl = categoryUrl.toLowerCase();
+    if (normUrl.includes("btech") || normUrl.includes("engineering")) return "btech";
+    if (normUrl.includes("mba") || normUrl.includes("management")) return "mba";
+    if (normUrl.includes("bba")) return "bba";
+    if (normUrl.includes("bca")) return "bca";
+    if (normUrl.includes("mca")) return "mca";
+    if (normUrl.includes("mbbs") || normUrl.includes("medicine")) return "medical";
+    if (normUrl.includes("law") || normUrl.includes("llb")) return "law";
+    if (normUrl.includes("bdes") || normUrl.includes("design")) return "design";
+    if (normUrl.includes("bcom") || normUrl.includes("commerce")) return "commerce";
+    if (normUrl.includes("pharma")) return "pharmacy";
+    if (normUrl.includes("nursing")) return "nursing";
+    if (normUrl.includes("barch") || normUrl.includes("architecture")) return "architecture";
+    return keyword.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
 
   private normalizeCategoryKeyword(query: string): string {
@@ -1630,7 +1732,7 @@ export class CollegesService implements OnModuleInit {
 
   // ---- college360 detail (step 2: user picked one) ----
 
-  /** Trimmed view for the college detail screen: name, short desc, logo, bg image, address, courses by category, top reviews. */
+  /** Trimmed view for the college detail screen: name, short desc, logo, bg image, address, courses by category, top reviews, facilities, fees, rating. */
   async getCollegeDetailView(
     slug: string,
     seriesId: number,
@@ -1640,6 +1742,8 @@ export class CollegesService implements OnModuleInit {
     if (!scraped) return null;
 
     return {
+      slug: scraped.slug,
+      seriesId: scraped.seriesId,
       name: scraped.name,
       shortDescription: scraped.about,
       logo: scraped.image,
@@ -1654,6 +1758,10 @@ export class CollegesService implements OnModuleInit {
         scraped.coursesByCategory,
       ),
       reviews: scraped.reviews,
+      facilities: scraped.facilities,
+      averageFees: scraped.averageFees,
+      aggregateRating: scraped.aggregateRating,
+      collegeType: scraped.collegeType ?? null,
     };
   }
 
@@ -1758,10 +1866,27 @@ export class CollegesService implements OnModuleInit {
       aggregateRating: info.aggregateRatingValue
         ? Number(info.aggregateRatingValue)
         : null,
+      collegeType: this.formatCollegeType(info.type),
     };
 
     this.setCached(this.detailCache, cacheKey, result, DETAIL_CACHE_TTL_MS);
     return result;
+  }
+
+  private formatCollegeType(typeField?: unknown): string | null {
+    if (!typeField) return null;
+    if (typeof typeField === "string") return typeField.trim();
+    if (Array.isArray(typeField) && typeField.length > 0) {
+      const item = typeField[0];
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object" && "type" in item && typeof (item as { type?: unknown }).type === "string") {
+        return (item as { type: string }).type.trim();
+      }
+    }
+    if (typeof typeField === "object" && typeField !== null && "type" in typeField && typeof (typeField as { type?: unknown }).type === "string") {
+      return (typeField as { type: string }).type.trim();
+    }
+    return null;
   }
 
   private mapPhotos(rawPhotos?: College360Photo[]): ScrapedCollegePhoto[] {

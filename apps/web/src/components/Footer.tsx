@@ -82,11 +82,7 @@ export function Footer() {
                   Get Free Counseling
                 </Link>
               </li>
-              <li>
-                <Link to="/dashboard" className="transition hover:text-lime">
-                  Counselor Dashboard
-                </Link>
-              </li>
+              
               <li>
                 <Link to="/login" className="transition hover:text-lime">
                   Admin Login
