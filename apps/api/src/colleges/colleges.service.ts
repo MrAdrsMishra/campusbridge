@@ -373,6 +373,38 @@ const DEFAULT_FETCH_HEADERS: Record<string, string> = {
   "sec-fetch-site": "same-site",
 };
 
+const GENERIC_COLLEGE_STOPWORDS = new Set([
+  "university",
+  "college",
+  "institute",
+  "institutes",
+  "technology",
+  "engineering",
+  "management",
+  "science",
+  "sciences",
+  "studies",
+  "group",
+  "campus",
+  "school",
+  "academy",
+  "of",
+  "and",
+  "for",
+  "in",
+  "the",
+  "higher",
+  "education",
+  "research",
+  "center",
+  "centre",
+  "department",
+  "national",
+  "state",
+  "international",
+  "deemed",
+]);
+
 type CacheEntry<T> = { data: T; expiresAt: number };
 
 // ============================================================
@@ -447,7 +479,8 @@ export class CollegesService implements OnModuleInit {
 
     const lastmodBySlug = new Map<string, string>();
     for (const doc of docs) {
-      const slug = this.collegeUrlSlug(doc.name, doc.city ?? "");
+      const rawSlug = this.collegeUrlSlug(doc.name, doc.city ?? "");
+      const slug = rawSlug ? rawSlug.replace(/-\d+$/, "") : "";
       if (slug && !lastmodBySlug.has(slug)) {
         lastmodBySlug.set(
           slug,
@@ -1580,8 +1613,8 @@ export class CollegesService implements OnModuleInit {
   /**
    * Hybrid matcher:
    * 1. Exact normalized match.
-   * 2. Token overlap ratio + acronym bonus (e.g., query "SAGE University, Bhopal" vs "Sanjeev Agrawal Global Educational University [SAGE] Bhopal").
-   * 3. Fuse.js fallback with relaxed threshold.
+   * 2. Token overlap ratio + acronym bonus (requires sharing at least 1 non-generic distinctive token).
+   * 3. Fuse.js fallback with strict score threshold (<= 0.3) + distinctive token guard.
    */
   private findBestCollegeMatch<
     T extends { name: string; url?: string; seriesId?: number },
@@ -1596,59 +1629,92 @@ export class CollegesService implements OnModuleInit {
     );
     if (exact) return exact;
 
-    // 2. Token Overlap & Acronym Score
+    // Token extraction
     const qTokens = normQuery.split(" ").filter((t) => t.length > 1);
-    if (qTokens.length > 0) {
-      let bestCandidate: T | null = null;
-      let maxScore = 0;
+    if (!qTokens.length) return null;
 
-      for (const candidate of candidates) {
-        const normCand = this.normalizeCollegeName(candidate.name);
-        const cTokens = normCand.split(" ").filter((t) => t.length > 1);
-        if (!cTokens.length) continue;
+    const qDistinctTokens = qTokens.filter(
+      (t) => !GENERIC_COLLEGE_STOPWORDS.has(t),
+    );
 
-        const cSet = new Set(cTokens);
-        const overlaps = qTokens.filter((t) => cSet.has(t)).length;
-        const tokenOverlapScore = overlaps / qTokens.length;
+    // 2. Token Overlap & Acronym Score
+    let bestCandidate: T | null = null;
+    let maxScore = 0;
 
-        // Check acronym match (e.g. "SAGE" in query matching [SAGE] in candidate)
-        const matches = candidate.name.match(
-          /\[([A-Za-z0-9]+)\]|\(([A-Za-z0-9]+)\)/g,
-        );
-        const acronyms = matches
-          ? matches.map((m) => m.replace(/[[\]()]/g, "").toLowerCase())
-          : [];
+    for (const candidate of candidates) {
+      const normCand = this.normalizeCollegeName(candidate.name);
+      const cTokens = normCand.split(" ").filter((t) => t.length > 1);
+      if (!cTokens.length) continue;
 
-        let acronymBonus = 0;
-        for (const qToken of qTokens) {
-          if (acronyms.includes(qToken)) {
-            acronymBonus = 0.3;
-            break;
-          }
-        }
+      const cSet = new Set(cTokens);
+      const overlaps = qTokens.filter((t) => cSet.has(t)).length;
+      const tokenOverlapScore = overlaps / qTokens.length;
 
-        const totalScore = tokenOverlapScore + acronymBonus;
-        if (totalScore > maxScore && totalScore >= 0.7) {
-          maxScore = totalScore;
-          bestCandidate = candidate;
+      // Check acronym match (e.g. "SAGE" in query matching [SAGE] in candidate)
+      const matches = candidate.name.match(
+        /\[([A-Za-z0-9]+)\]|\(([A-Za-z0-9]+)\)/g,
+      );
+      const acronyms = matches
+        ? matches.map((m) => m.replace(/[[\]()]/g, "").toLowerCase())
+        : [];
+
+      let acronymBonus = 0;
+      for (const qToken of qTokens) {
+        if (acronyms.includes(qToken)) {
+          acronymBonus = 0.3;
+          break;
         }
       }
 
-      if (bestCandidate) return bestCandidate;
+      // Candidate MUST share at least 1 non-generic distinctive token or acronym if present in query
+      const hasDistinctiveMatch =
+        qDistinctTokens.length === 0 ||
+        qDistinctTokens.some((t) => cSet.has(t) || acronyms.includes(t));
+
+      if (!hasDistinctiveMatch) continue;
+
+      const totalScore = tokenOverlapScore + acronymBonus;
+      if (totalScore > maxScore && totalScore >= 0.55) {
+        maxScore = totalScore;
+        bestCandidate = candidate;
+      }
     }
 
-    // 3. Fuse.js fallback with relaxed threshold
+    if (bestCandidate) return bestCandidate;
+
+    // 3. Fuse.js fallback with strict threshold and distinctive token check
     const fuse = new Fuse(candidates, {
       keys: ["name"],
-      threshold: 0.5,
+      threshold: 0.3,
+      includeScore: true,
       ignoreLocation: true,
     });
     const fuseResults = fuse.search(queryName);
-    return fuseResults.length > 0 ? fuseResults[0].item : null;
+    if (!fuseResults.length) return null;
+
+    const top = fuseResults[0];
+    if ((top.score ?? 1) > 0.3) return null;
+
+    const candNorm = this.normalizeCollegeName(top.item.name);
+    const candTokens = new Set(candNorm.split(" ").filter((t) => t.length > 1));
+
+    const matches = top.item.name.match(
+      /\[([A-Za-z0-9]+)\]|\(([A-Za-z0-9]+)\)/g,
+    );
+    const acronyms = matches
+      ? matches.map((m) => m.replace(/[[\]()]/g, "").toLowerCase())
+      : [];
+
+    const hasDistinctiveMatch =
+      qDistinctTokens.length === 0 ||
+      qDistinctTokens.some((t) => candTokens.has(t) || acronyms.includes(t));
+
+    return hasDistinctiveMatch ? top.item : null;
   }
 
   async getCollegeDetailsByName(
     name: string,
+    urlSlug?: string,
   ): Promise<CollegeDetailView | null> {
     const collegeName = name.trim();
 
@@ -1656,7 +1722,12 @@ export class CollegesService implements OnModuleInit {
       throw new BadRequestException("College name is required.");
     }
 
-    const resolved = await this.resolveCollegeOnCollege360(collegeName);
+    // Deterministic local-DB resolution first — direct /colleges/detail/<slug>
+    // landings must not depend on College360 search availability (the upstream
+    // search returns [] for several query shapes and failed lookups are cached).
+    const resolved =
+      (await this.resolveCollegeFromDb(collegeName, urlSlug)) ??
+      (await this.resolveCollegeOnCollege360(collegeName));
 
     if (!resolved.slug || resolved.seriesId === null) {
       throw new NotFoundException(
@@ -1665,6 +1736,72 @@ export class CollegesService implements OnModuleInit {
     }
 
     return this.getCollegeDetailView(resolved.slug, resolved.seriesId);
+  }
+
+  /**
+   * Deterministic local-DB resolution for name/slug lookups, used BEFORE any
+   * College360 network call.
+   *
+   * Direct /colleges/detail/<slug> landings derive a plain-text name from the
+   * URL slug (e.g. "Viva Institute of Technology VIOT Thane"), which normalizes
+   * to the same key as the DB's stored College360 name ("Viva Institute of
+   * Technology [VIOT], Thane"), so the DB alone can resolve most slugs without
+   * depending on upstream search availability.
+   *
+   * 1. Exact url-slug match (case-insensitive; also tries the "-<digits>"-stripped slug).
+   * 2. Hybrid name match across all DB colleges (exact -> token overlap & acronym -> Fuse.js).
+   */
+  private async resolveCollegeFromDb(
+    name: string,
+    urlSlug?: string,
+  ): Promise<{ slug: string; seriesId: number } | null> {
+    const slugTrimmed = urlSlug?.trim();
+
+    if (slugTrimmed) {
+      const slugVariants = new Set<string>([slugTrimmed]);
+      const cleaned = slugTrimmed.replace(/-\d+$/, "");
+      if (cleaned) slugVariants.add(cleaned);
+
+      for (const variant of slugVariants) {
+        const bySlug = (await this.colleges
+          .findOne({
+            url: {
+              $regex: new RegExp(`^${this.escapeRegExp(variant)}$`, "i"),
+            },
+          })
+          .lean()) as unknown as
+          | { url?: string; seriesId?: number }
+          | null;
+
+        if (bySlug?.url && bySlug.seriesId != null) {
+          this.logger.debug(
+            `DB slug match: "${variant}" -> "${bySlug.url}" (seriesId ${bySlug.seriesId})`,
+          );
+          return { slug: bySlug.url, seriesId: bySlug.seriesId };
+        }
+      }
+    }
+
+    const docs = (await this.colleges
+      .find({}, { name: 1, url: 1, seriesId: 1 })
+      .limit(5000)
+      .lean()) as unknown as Array<{
+      name: string;
+      url?: string;
+      seriesId?: number;
+    }>;
+
+    if (!docs.length) return null;
+
+    const matched = this.findBestCollegeMatch(name, docs);
+    if (matched?.url && matched.seriesId != null) {
+      this.logger.debug(
+        `DB name match: "${name}" -> "${matched.name}" (seriesId ${matched.seriesId})`,
+      );
+      return { slug: matched.url, seriesId: matched.seriesId };
+    }
+
+    return null;
   }
   /**
    * Resolve a single Shiksha college name against College360.
@@ -1809,6 +1946,35 @@ export class CollegesService implements OnModuleInit {
       queries.add(alias);
     }
 
+    // Extract non-generic words for fallback query variants (e.g. "IES", "Visva", "Bansal")
+    const words = trimmed.split(/\s+/).filter((w) => w.length > 1);
+    const nonGeneric = words.filter(
+      (w) =>
+        ![
+          "university",
+          "college",
+          "institute",
+          "technology",
+          "management",
+          "science",
+          "engineering",
+          "of",
+          "and",
+          "for",
+          "the",
+        ].includes(w.toLowerCase()),
+    );
+
+    if (nonGeneric.length > 0) {
+      // First significant brand word (e.g. "IES", "Visva")
+      queries.add(nonGeneric[0]);
+
+      if (nonGeneric.length >= 2) {
+        // First two significant words (e.g. "Visva Bharati")
+        queries.add(`${nonGeneric[0]} ${nonGeneric[1]}`);
+      }
+    }
+
     // Existing safe variants
     const dashIndex = trimmed.indexOf(" - ");
 
@@ -1827,22 +1993,6 @@ export class CollegesService implements OnModuleInit {
 
       if (segment) {
         queries.add(segment);
-        const words = segment.split(/\s+/).filter((w) => w.length > 2);
-        const nonGeneric = words.filter(
-          (w) =>
-            ![
-              "university",
-              "college",
-              "institute",
-              "technology",
-              "management",
-              "science",
-              "engineering",
-            ].includes(w.toLowerCase()),
-        );
-        if (nonGeneric.length > 0) {
-          queries.add(nonGeneric[0]);
-        }
       }
     }
 

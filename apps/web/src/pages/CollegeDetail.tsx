@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useHomeStore } from "../stores/homeStore";
 import { ArrowLeft, Building2, GraduationCap, MapPin, RefreshCw, Star, IndianRupee, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { CollegeListItem } from "../types";
@@ -44,26 +44,60 @@ const CollegeDetailContent = () => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, []);
 
-  const getTargetCollege = useCallback((): CollegeListItem | null => {
+  // Reset selected college state whenever the URL slug changes
+  useEffect(() => {
+    setSelectedCollege(null);
+  }, [slug, setSelectedCollege]);
+
+  const targetCollege = useMemo((): CollegeListItem | null => {
     if (state?.college) {
       try {
         sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(state.college));
       } catch { }
       return state.college as CollegeListItem;
     }
-    if (slug && suggestions.length > 0) {
-      // Primary match: compare the URL slug against the generated slug for each suggestion.
-      // Fallback: numeric instituteId or raw College360 slug (backward compat with old URLs).
-      const match = suggestions.find((s) =>
-        toCollegeSlug(s.name, s.city ?? null) === slug ||
-        String(s.instituteId ?? "") === slug ||
-        s.slug === slug
-      );
-      if (match) {
-        try {
-          sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(match));
-        } catch { }
-        return match;
+    if (slug) {
+      const cleanUrlSlug = slug.replace(/-\d+$/, "").toLowerCase();
+
+      if (suggestions.length > 0) {
+        // Primary match: compare clean URL slug against generated slug & raw slug for each suggestion.
+        const match = suggestions.find((s) => {
+          const genSlug = toCollegeSlug(s.name, s.city ?? null).toLowerCase();
+          const rawSlugClean = (s.slug ?? "").replace(/-\d+$/, "").toLowerCase();
+          return (
+            genSlug === cleanUrlSlug ||
+            rawSlugClean === cleanUrlSlug ||
+            s.slug?.toLowerCase() === slug.toLowerCase() ||
+            String(s.instituteId ?? "") === slug
+          );
+        });
+        if (match) {
+          try {
+            sessionStorage.setItem("nexteduwise_last_college", JSON.stringify(match));
+          } catch { }
+          return match;
+        }
+      }
+
+      // Fallback for direct URL landings (SEO crawlers/direct links):
+      // Infer college name from the clean URL slug so backend name-resolution handles it.
+      const nameFromSlug = slug
+        .replace(/-\d+$/, "")
+        .replace(/-/g, " ")
+        .trim();
+
+      if (nameFromSlug) {
+        return {
+          name: nameFromSlug,
+          instituteId: null,
+          logo: null,
+          headerImage: null,
+          minFees: null,
+          maxFees: null,
+          slug: slug,
+          seriesId: null,
+          city: null,
+        } as CollegeListItem;
       }
     }
     if (selectedSuggestion) {
@@ -78,8 +112,6 @@ const CollegeDetailContent = () => {
     } catch { }
     return null;
   }, [state?.college, slug, suggestions, selectedSuggestion]);
-
-  const targetCollege = getTargetCollege();
 
   const fetchCollege = useCallback(async () => {
     if (!targetCollege) return;
@@ -105,6 +137,11 @@ const CollegeDetailContent = () => {
           useHomeStore.getState().filters.city ||
           undefined;
         if (city) params.set("city", city);
+        if (targetCollege.slug) {
+          // Lets the backend resolve direct /colleges/detail/<slug> landings
+          // from the local DB (slug match) before the College360 name search.
+          params.set("slug", targetCollege.slug);
+        }
         if (targetCollege.instituteId) {
           params.set("shikshaInstituteId", String(targetCollege.instituteId));
         }

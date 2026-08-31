@@ -15,12 +15,15 @@ export class CollegeSearchQueryDto {
 // src/colleges/dto/college-scrape-query.dto.ts
 
 
-const SLUG_PATTERN = /^[A-Za-z0-9-]{3,150}$/;
+// Slug token: College360 slugs ("Viva-Institute-of-Technology-VIOT-Thane") and
+// legacy SEO slugs ("A.-C.-Patil-College...(ACPCE)-Navi-Mumbai") — any run of
+// non-whitespace chars, bounded in length.
+const SLUG_PATTERN = /^\S{3,200}$/;
 
 export class CollegeScrapeQueryDto {
   @IsOptional()
   @IsString()
-  @Matches(SLUG_PATTERN, { message: "slug must match the format returned by the suggestions endpoint" })
+  @Matches(SLUG_PATTERN, { message: "slug must be a single URL token of 3-200 characters without spaces" })
   slug?: string;
 
   @IsOptional()

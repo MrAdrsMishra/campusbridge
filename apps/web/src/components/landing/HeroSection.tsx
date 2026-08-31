@@ -21,26 +21,58 @@ export function HeroSection({
   const [course, setCourse] = useState("");
   const { text } = useTypewriter(TYPED_PHRASES);
 
-  // Background slides come from the colleges' header images, so the hero shows real
-  // campus photos with the college name in the corner. Falls back to the generic
-  // HERO_SLIDES when no college has a header image yet.
-  //
-  // NOTE: we deliberately use formatImageUrl (NOT fullImageUrl) here. Shiksha's
-  // image store only serves the resized thumbnail (e.g. "..._270x200.jpg"); the
-  // full-size/stripped URL returns 403 (hotlink protection), so stripping the size
-  // token would leave the hero with broken images.
+  // Background slides combine real campus photos from DB colleges / cached visits
+  // with fallback high-res campus slides to guarantee a rich rotating hero slideshow.
   const slides = useMemo(() => {
-    const collegeSlides = colleges
-      .filter((c) => c.headerImage)
-      .map((c) => ({ image: formatImageUrl(c.headerImage) ?? "", name: c.name }));
-    if (collegeSlides.length > 0) return collegeSlides;
-    return HERO_SLIDES.map((src) => ({ image: src, name: null }));
+    const list: { image: string; name: string | null }[] = [];
+    const seenUrls = new Set<string>();
+
+    const addCollegeSlide = (c: Partial<CollegeListItem>) => {
+      const rawImg =
+        c.headerImage ||
+        (c as { backgroundImage?: string }).backgroundImage ||
+        c.logo;
+      if (!rawImg || !c.name) return;
+      const formatted = formatImageUrl(rawImg);
+      if (formatted && !seenUrls.has(formatted)) {
+        seenUrls.add(formatted);
+        list.push({ image: formatted, name: c.name });
+      }
+    };
+
+    // 1. Current listed colleges from props
+    colleges.forEach(addCollegeSlide);
+
+    // 2. Previously cached colleges in sessionStorage (from earlier searches or detail visits)
+    try {
+      const savedLast = sessionStorage.getItem("nexteduwise_last_college");
+      if (savedLast) {
+        addCollegeSlide(JSON.parse(savedLast));
+      }
+      const savedCache = sessionStorage.getItem("nexteduwise_colleges_cache");
+      if (savedCache) {
+        const parsed = JSON.parse(savedCache);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(addCollegeSlide);
+        }
+      }
+    } catch { }
+
+    // 3. Fallback slides to ensure a smooth, multi-image slideshow
+    HERO_SLIDES.forEach((src) => {
+      if (!seenUrls.has(src)) {
+        seenUrls.add(src);
+        list.push({ image: src, name: null });
+      }
+    });
+
+    return list;
   }, [colleges]);
 
   const current = slides[active % slides.length];
 
   useEffect(() => {
-    if (slides.length === 0) return;
+    if (slides.length <= 1) return;
     const id = window.setInterval(() => setActive((a) => (a + 1) % slides.length), SLIDE_MS);
     return () => window.clearInterval(id);
   }, [slides.length]);
@@ -52,10 +84,14 @@ export function HeroSection({
     <div className="absolute inset-0">
       {slides.map((slide, index) => (
         <img
-          key={index}
+          key={`${slide.image}-${index}`}
           src={slide.image}
           alt={slide.name ?? "University nexteduwise"}
           loading={index === 0 ? "eager" : "lazy"}
+          onError={(e) => {
+            // Graceful fallback if a college image fails to load
+            (e.currentTarget as HTMLImageElement).src = HERO_SLIDES[0];
+          }}
           className={`slide ${
             active % slides.length === index ? "is-active" : ""
           } h-full w-full object-cover object-center`}

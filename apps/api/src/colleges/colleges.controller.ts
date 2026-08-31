@@ -98,7 +98,7 @@ export class CollegesController {
         slug = resolved.slug;
         seriesId = resolved.seriesId;
       } else {
-        return this.service.getCollegeDetailsByName(query.name);
+        return this.service.getCollegeDetailsByName(query.name, query.slug);
       }
     }
 
