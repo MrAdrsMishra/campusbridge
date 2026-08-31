@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { College, CollegeSchema, Category, CategorySchema } from './college.schema';
-import { CollegesController } from './colleges.controller';
+import { CollegesController, SitemapRootController } from './colleges.controller';
 import { CollegesService } from './colleges.service';
 
 @Module({
@@ -11,7 +11,7 @@ import { CollegesService } from './colleges.service';
       { name: Category.name, schema: CategorySchema },
     ]),
   ],
-  controllers: [CollegesController],
+  controllers: [CollegesController, SitemapRootController],
   providers: [CollegesService],
 })
 export class CollegesModule {}

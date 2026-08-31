@@ -461,6 +461,147 @@ export class CollegesService implements OnModuleInit {
     return [...lastmodBySlug].map(([slug, lastmod]) => ({ slug, lastmod }));
   }
 
+  /** Generate dynamic XML sitemap containing all 670+ programmatic & college URLs. */
+  async generateDynamicSitemap(): Promise<string> {
+    const origin = "https://nexteduwise.com";
+    const cities = [
+      "bhopal",
+      "indore",
+      "pune",
+      "mumbai",
+      "delhi",
+      "bangalore",
+      "hyderabad",
+      "chennai",
+      "kolkata",
+      "ahmedabad",
+      "jaipur",
+      "noida",
+      "gurgaon",
+      "chandigarh",
+      "lucknow",
+      "nagpur",
+      "coimbatore",
+    ];
+
+    const categories = [
+      "engineering",
+      "btech",
+      "mtech",
+      "bca",
+      "mca",
+      "polytechnic",
+      "mba",
+      "bba",
+      "pgdm",
+      "medical",
+      "mbbs",
+      "bds",
+      "nursing",
+      "pharmacy",
+      "bpharma",
+      "mpharma",
+      "bsc",
+      "msc",
+      "law",
+      "llb",
+      "ba-llb",
+      "design",
+      "bdes",
+      "arts",
+      "ba",
+      "ma",
+      "journalism",
+      "mass-communication",
+      "commerce",
+      "bcom",
+      "mcom",
+      "architecture",
+      "barch",
+      "hotel-management",
+      "hm",
+      "bed",
+      "med",
+      "agriculture",
+    ];
+
+    const blogSlugs = [
+      "btech-admission-2026-guide",
+      "best-engineering-colleges-india-2026",
+      "how-to-choose-the-right-college-india",
+      "best-btech-branches-2026",
+      "college-admission-2026-guide",
+    ];
+
+    const pureCityUrls = cities
+      .map(
+        (city) => `
+  <url>
+    <loc>${origin}/colleges/${city}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>`,
+      )
+      .join("");
+
+    const categoryCityUrls = cities
+      .map((city) =>
+        categories
+          .map(
+            (cat) => `
+  <url>
+    <loc>${origin}/${cat}-colleges/${city}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>`,
+          )
+          .join(""),
+      )
+      .join("");
+
+    const guideUrls = blogSlugs
+      .map(
+        (slug) => `
+  <url>
+    <loc>${origin}/guides/${slug}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>`,
+      )
+      .join("");
+
+    const collegeUrls = (await this.getCollegeSitemapEntries())
+      .map(
+        (c) => `
+  <url>
+    <loc>${origin}/colleges/detail/${c.slug}</loc>
+    <lastmod>${c.lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`,
+      )
+      .join("");
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${origin}/colleges</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${origin}/guides</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>${guideUrls}${pureCityUrls}${categoryCityUrls}${collegeUrls}
+</urlset>`;
+  }
+
   /** Mirrors the web app's toCollegeSlug(name, city) so sitemap URLs match canonicals. */
   private collegeUrlSlug(name: string, city: string): string {
     const slugify = (s: string) =>

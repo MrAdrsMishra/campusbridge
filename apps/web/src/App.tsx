@@ -14,6 +14,8 @@ import { CounselorPopup } from "./components/CounselorPopup";
 import { Footer } from "./components/Footer";
 import { DesiredLocationPopup } from "./components/DesiredLocationPopup";
 
+import { useApiStore } from "./stores/apiStore";
+
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 function DashboardRoute() {
@@ -36,6 +38,19 @@ function CollegeDetailRedirect() {
     ? `/colleges/detail/${slug}${location.search}`
     : `/colleges/detail${location.search}`;
   return <Navigate to={target} replace />;
+}
+
+/** Dynamic sitemap route: directs browser/crawlers directly to the live NestJS API dynamic sitemap endpoint. */
+function DynamicSitemapRoute() {
+  React.useEffect(() => {
+    const apiBase = useApiStore.getState().baseUrl;
+    const target = apiBase.startsWith("http")
+      ? `${apiBase.replace(/\/+$/, "")}/sitemap.xml`
+      : `/api/sitemap.xml`;
+    window.location.href = target;
+  }, []);
+
+  return null;
 }
 
 export default function App() {
@@ -125,8 +140,8 @@ export default function App() {
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/guides/:slug" element={<GuideDetailPage />} />
 
-            {/* SEO Quality Gate & Diagnostics Tool */}
-            <Route path="/seo-diagnostics" element={<SeoDiagnosticsPage />} />
+            {/* SEO Dynamic Sitemap Route */}
+            <Route path="/sitemap.xml" element={<DynamicSitemapRoute />} />
 
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dashboard" element={<DashboardRoute />} />
