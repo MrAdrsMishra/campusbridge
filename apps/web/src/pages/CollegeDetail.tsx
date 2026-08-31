@@ -311,7 +311,7 @@ const CollegeDetailContent = () => {
             <SeoHead
               title={`${selectedCollege.name}${city ? ` ${city}` : ""}: Courses, Fees, Admission & Placements 2026`}
               description={`Explore ${selectedCollege.name}${city ? ` in ${city}` : ""} course list, fees structure, eligibility criteria, admission guidelines and verified placement records.`}
-              canonicalUrl={`/colleges/${toCollegeSlug(selectedCollege.name, city)}`}
+              canonicalUrl={`/colleges/detail/${toCollegeSlug(selectedCollege.name, city)}`}
               ogImage={formatImageUrl(selectedCollege.backgroundImage || selectedCollege.logo || "") || undefined}
               jsonLd={generateCollegeSchema(selectedCollege)}
             />

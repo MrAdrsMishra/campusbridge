@@ -21,24 +21,135 @@ import {
 export class CollegesController {
   constructor(private readonly service: CollegesService) {}
 
-  // Dynamic XML Sitemap Endpoint for Search Engine Crawlers
+  // Dynamic XML Sitemap Endpoint for Search Engine Crawlers.
+  // Emits every known college detail page from the DB plus the static section,
+  // city and category pages, so college pages are discoverable without
+  // executing the app's client-side JavaScript.
   @Get("sitemap.xml")
 
   @Header("Content-Type", "application/xml")
   @Header("Cache-Control", "public, max-age=3600")
-  getSitemapXml() {
+  async getSitemapXml() {
     const origin = "https://nexteduwise.com";
-    const cities = ["bhopal", "indore", "pune", "mumbai", "delhi", "bangalore"];
-    const categories = ["engineering", "mba", "bba", "medical", "law"];
+    const cities = [
+      "bhopal",
+      "indore",
+      "pune",
+      "mumbai",
+      "delhi",
+      "bangalore",
+      "hyderabad",
+      "chennai",
+      "kolkata",
+      "ahmedabad",
+      "jaipur",
+      "noida",
+      "gurgaon",
+      "chandigarh",
+      "lucknow",
+      "nagpur",
+      "coimbatore",
+    ];
 
-    const cityUrls = cities.map((city) =>
-      categories.map((cat) => `
+    const categories = [
+      "engineering",
+      "btech",
+      "mtech",
+      "bca",
+      "mca",
+      "polytechnic",
+      "mba",
+      "bba",
+      "pgdm",
+      "medical",
+      "mbbs",
+      "bds",
+      "nursing",
+      "pharmacy",
+      "bpharma",
+      "mpharma",
+      "bsc",
+      "msc",
+      "law",
+      "llb",
+      "ba-llb",
+      "design",
+      "bdes",
+      "arts",
+      "ba",
+      "ma",
+      "journalism",
+      "mass-communication",
+      "commerce",
+      "bcom",
+      "mcom",
+      "architecture",
+      "barch",
+      "hotel-management",
+      "hm",
+      "bed",
+      "med",
+      "agriculture",
+    ];
+
+    // Generate pure city landing pages (/colleges/bhopal, etc.)
+    const pureCityUrls = cities
+      .map(
+        (city) => `
+  <url>
+    <loc>${origin}/colleges/${city}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>`,
+      )
+      .join("");
+
+    // Generate category + city landing pages (/btech-colleges/bhopal, etc.)
+    const categoryCityUrls = cities
+      .map((city) =>
+        categories
+          .map(
+            (cat) => `
   <url>
     <loc>${origin}/${cat}-colleges/${city}</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
-  </url>`).join("")
-    ).join("");
+  </url>`,
+          )
+          .join(""),
+      )
+      .join("");
+
+    const collegeUrls = (await this.service.getCollegeSitemapEntries())
+      .map(
+        (c) => `
+  <url>
+    <loc>${origin}/colleges/detail/${c.slug}</loc>
+    <lastmod>${c.lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`,
+      )
+      .join("");
+
+    const blogSlugs = [
+      "btech-admission-2026-guide",
+      "best-engineering-colleges-india-2026",
+      "how-to-choose-the-right-college-india",
+      "best-btech-branches-2026",
+      "college-admission-2026-guide",
+    ];
+
+    const guideUrls = blogSlugs
+      .map(
+        (slug) => `
+  <url>
+    <loc>${origin}/guides/${slug}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>`,
+      )
+      .join("");
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -56,7 +167,7 @@ export class CollegesController {
     <loc>${origin}/guides</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-  </url>${cityUrls}
+  </url>${guideUrls}${pureCityUrls}${categoryCityUrls}${collegeUrls}
 </urlset>`;
   }
 
@@ -103,7 +214,7 @@ export class CollegesController {
   // When a `name` and `city` are supplied, it uses the city-based Fuse.js & DB lookup strategy
   // to resolve the canonical College360 url (slug + seriesId), then loads full details.
   // With slug + seriesId provided, it loads them directly.
-  @Get("details")
+  @Get(["details", "detail"])
   async details(@Query() query: CollegeScrapeQueryDto) {
     let slug = query.slug;
     let seriesId = query.seriesId;

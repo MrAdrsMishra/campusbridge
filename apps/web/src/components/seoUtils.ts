@@ -857,7 +857,7 @@ export function generateRecommendations(options: RecommendationOptions): Recomme
 
     const sameCity =
       Boolean(collegeCity) && collegeCity.toLowerCase() === cityLower;
-    add(collegeName, `/college-detail/${collegeUrlSlug}`, "college", sameCity ? 1 : 2);
+    add(collegeName, `/colleges/detail/${collegeUrlSlug}`, "college", sameCity ? 1 : 2);
     realCollegeCount += 1;
     if (realCollegeCount >= 6) break;
   }
@@ -1051,7 +1051,7 @@ export function generateCollegeSchema(college: CollegeDetailView, origin: string
     "@type": "EducationalOrganization",
     "name": college.name || "College",
     "description": `Detailed admissions, courses, fee structure, eligibility, and facilities for ${college.name || "this college"}${city ? ` in ${city}` : ""}.`,
-    "url": `${origin}/colleges/${slug}`,
+    "url": `${origin}/colleges/detail/${slug}`,
     "logo": college.logo ? (college.logo.startsWith("http") ? college.logo : `${origin}${college.logo}`) : undefined,
     "image": college.backgroundImage ? (college.backgroundImage.startsWith("http") ? college.backgroundImage : `${origin}${college.backgroundImage}`) : undefined,
     "address": {

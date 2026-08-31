@@ -392,7 +392,7 @@ export default function HomePage() {
     setSelectedSuggestion(fresh);
     // Build a human-readable, SEO-friendly URL slug: college-name-city
     const urlSlug = toCollegeSlug(fresh.name, fresh.city ?? null);
-    navigate(`/college-detail/${urlSlug}`, { state: { college: fresh } });
+    navigate(`/colleges/detail/${urlSlug}`, { state: { college: fresh } });
   };
   const onExplore = (category: string) => {
     const query = CATEGORY_SEARCH_MAP[category] ?? category;

@@ -426,6 +426,61 @@ export class CollegesService implements OnModuleInit {
     await this.seedDefaultCategories();
   }
 
+  /**
+   * Sitemap entries for every known college detail page, deduped by the same
+   * name-city slug the web app uses for /colleges/detail/<slug> URLs, so the
+   * sitemap, canonicals and internal links all agree on one URL per college.
+   */
+  async getCollegeSitemapEntries(): Promise<
+    { slug: string; lastmod: string }[]
+  > {
+    // `updatedAt` exists via schema timestamps but isn't on the class type.
+    const docs = (await this.colleges
+      .find({}, { name: 1, city: 1, updatedAt: 1 })
+      .sort({ updatedAt: -1 })
+      .limit(5000)
+      .lean()) as unknown as Array<{
+      name: string;
+      city?: string;
+      updatedAt?: Date;
+    }>;
+
+    const lastmodBySlug = new Map<string, string>();
+    for (const doc of docs) {
+      const slug = this.collegeUrlSlug(doc.name, doc.city ?? "");
+      if (slug && !lastmodBySlug.has(slug)) {
+        lastmodBySlug.set(
+          slug,
+          doc.updatedAt
+            ? new Date(doc.updatedAt).toISOString()
+            : new Date().toISOString(),
+        );
+      }
+    }
+
+    return [...lastmodBySlug].map(([slug, lastmod]) => ({ slug, lastmod }));
+  }
+
+  /** Mirrors the web app's toCollegeSlug(name, city) so sitemap URLs match canonicals. */
+  private collegeUrlSlug(name: string, city: string): string {
+    const slugify = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\w\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+
+    const nameSlug = slugify(name ?? "");
+    const citySlug = slugify(city ?? "");
+    if (!nameSlug) return "";
+    if (!citySlug || nameSlug.includes(citySlug)) return nameSlug;
+    return `${nameSlug}-${citySlug}`;
+  }
+
   private async seedDefaultCategories() {
     try {
       const count = await this.categoryModel.countDocuments();

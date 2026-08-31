@@ -75,23 +75,28 @@
 
   <!-- Educational Guides -->
   <url>
-    <loc>https://nexteduwise.com/guides/btech-admission-2026</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://nexteduwise.com/guides/btech-admission-2026-guide</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://nexteduwise.com/guides/how-to-choose-engineering-college</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://nexteduwise.com/guides/best-engineering-colleges-india-2026</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://nexteduwise.com/guides/btech-vs-bca</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://nexteduwise.com/guides/how-to-choose-the-right-college-india</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://nexteduwise.com/guides/mba-vs-pgdm</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <loc>https://nexteduwise.com/guides/best-btech-branches-2026</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://nexteduwise.com/guides/college-admission-2026-guide</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
   </url>
 </urlset>

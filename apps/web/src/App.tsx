@@ -1,5 +1,7 @@
+
+
 import React from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import HomePage from "./stores/HomePage";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -25,6 +27,16 @@ function DashboardRoute() {
 }
 
 const isAdminSession = () => Boolean(localStorage.getItem("nexteduwise.accessToken"));
+
+/** Legacy / variant college detail URLs -> canonical detail route (/colleges/detail/:slug or /colleges/detail). */
+function CollegeDetailRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const target = slug
+    ? `/colleges/detail/${slug}${location.search}`
+    : `/colleges/detail${location.search}`;
+  return <Navigate to={target} replace />;
+}
 
 export default function App() {
   return (
@@ -98,12 +110,16 @@ export default function App() {
             <Route path="/courses/:courseSlug" element={<CityCourseLandingPage />} />
             <Route path="/courses/:courseSlug/:citySlug" element={<CityCourseLandingPage />} />
 
-            {/* College Detail Routes */}
+            {/* College Detail Routes — Canonical */}
+            <Route path="/colleges/detail" element={<CollegeDetail />} />
             <Route path="/colleges/detail/:slug" element={<CollegeDetail />} />
-            <Route path="/college-detail" element={<CollegeDetail />} />
-            <Route path="/college-detail/:slug" element={<CollegeDetail />} />
-            <Route path="/college-details" element={<CollegeDetail />} />
-            <Route path="/college-details/:slug" element={<CollegeDetail />} />
+
+            {/* College Detail Routes — Legacy & Variant Redirects */}
+            <Route path="/college-detail" element={<CollegeDetailRedirect />} />
+            <Route path="/college-detail/:slug" element={<CollegeDetailRedirect />} />
+            <Route path="/college-details" element={<CollegeDetailRedirect />} />
+            <Route path="/college-details/:slug" element={<CollegeDetailRedirect />} />
+            <Route path="/college/:slug" element={<CollegeDetailRedirect />} />
 
             {/* Educational Content Hub & Guides */}
             <Route path="/guides" element={<GuidesPage />} />

@@ -309,7 +309,7 @@ export const CityCourseLandingPage: React.FC<CityCourseLandingPageProps> = ({ ca
                           </div>
                           <div>
                             <h3 className="font-bold text-lg text-slate-900 group-hover:text-emerald-600 transition-colors">
-                              <Link to={`/colleges/${collegeSlug}`} state={{ college }}>
+                              <Link to={`/colleges/detail/${collegeSlug}`} state={{ college }}>
                                 {college.name}
                               </Link>
                             </h3>
@@ -327,7 +327,7 @@ export const CityCourseLandingPage: React.FC<CityCourseLandingPageProps> = ({ ca
                         </div>
 
                         <Link
-                          to={`/colleges/${collegeSlug}`}
+                          to={`/colleges/detail/${collegeSlug}`}
                           state={{ college }}
                           className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg transition-all w-full sm:w-auto"
                         >
