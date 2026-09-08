@@ -1,8 +1,8 @@
 services:
   web:
     build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+      context: apps/web
+      dockerfile: Dockerfile
     ports: ["8000:80"]
     depends_on:
       api:
@@ -13,10 +13,11 @@ services:
     build:
       context: apps/api
       dockerfile: Dockerfile
+    ports: ["3000:3000"]
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/nexteduwise}
       PORT: 3000
-      WEB_ORIGIN: http://localhost:8080
+      WEB_ORIGIN: http://localhost:8000
       JWT_SECRET: ${JWT_SECRET}
       SETUP_KEY: ${SETUP_KEY}
       SECRET_KEY: ${SECRET_KEY:-nexteduwise-admin-secret}
@@ -28,5 +29,3 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
-
- 

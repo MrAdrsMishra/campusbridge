@@ -1727,9 +1727,10 @@ export class CollegesService implements OnModuleInit {
     // search returns [] for several query shapes and failed lookups are cached).
     const resolved =
       (await this.resolveCollegeFromDb(collegeName, urlSlug)) ??
-      (await this.resolveCollegeOnCollege360(collegeName));
+      (await this.resolveCollegeOnCollege360(collegeName)) ??
+      (await this.resolveCollegeFuzzyFallback(collegeName, urlSlug));
 
-    if (!resolved.slug || resolved.seriesId === null) {
+    if (!resolved?.slug || resolved.seriesId === null) {
       throw new NotFoundException(
         `College "${collegeName}" could not be found.`,
       );
@@ -1799,6 +1800,94 @@ export class CollegesService implements OnModuleInit {
         `DB name match: "${name}" -> "${matched.name}" (seriesId ${matched.seriesId})`,
       );
       return { slug: matched.url, seriesId: matched.seriesId };
+    }
+
+    return null;
+  }
+
+  /**
+   * Last-resort fuzzy fallback across all DB colleges when exact slug and
+   * upstream searches return no confident match.
+   */
+  private async resolveCollegeFuzzyFallback(
+    name: string,
+    urlSlug?: string,
+  ): Promise<{ slug: string; seriesId: number } | null> {
+    const slugTrimmed = urlSlug?.trim();
+    this.logger.debug(
+      `Running fuzzy fallback for name="${name}" slug="${slugTrimmed}"`,
+    );
+
+    const docs = (await this.colleges
+      .find({}, { name: 1, url: 1, seriesId: 1 })
+      .limit(10000)
+      .lean()) as unknown as Array<{
+      name: string;
+      url?: string;
+      seriesId?: number;
+    }>;
+
+    if (!docs || !docs.length) return null;
+
+    // 1. Fuse.js search across name and url
+    const targets = [
+      name,
+      slugTrimmed?.replace(/-/g, " "),
+      slugTrimmed,
+    ].filter(Boolean) as string[];
+
+    const fuse = new Fuse(docs, {
+      keys: ["name", "url"],
+      threshold: 0.55,
+      includeScore: true,
+      ignoreLocation: true,
+    });
+
+    for (const target of targets) {
+      const results = fuse.search(target);
+      if (results.length > 0) {
+        const top = results[0].item;
+        if (top.url && top.seriesId != null) {
+          this.logger.log(
+            `Fuzzy fallback DB match found: "${target}" -> "${top.name}" (${top.url}, seriesId: ${top.seriesId})`,
+          );
+          return { slug: top.url, seriesId: top.seriesId };
+        }
+      }
+    }
+
+    // 2. Distinct token overlap fallback
+    const normQuery = this.normalizeCollegeName(name);
+    const qTokens = normQuery
+      .split(" ")
+      .filter((t) => t.length > 1 && !GENERIC_COLLEGE_STOPWORDS.has(t));
+
+    if (qTokens.length > 0) {
+      let bestDoc: (typeof docs)[0] | null = null;
+      let maxOverlap = 0;
+
+      for (const doc of docs) {
+        if (!doc.url || doc.seriesId == null) continue;
+        const docNorm = this.normalizeCollegeName(
+          `${doc.name} ${doc.url || ""}`,
+        );
+        const docTokens = new Set(
+          docNorm.split(" ").filter((t) => t.length > 1),
+        );
+
+        const overlap = qTokens.filter((t) => docTokens.has(t)).length;
+        if (overlap > maxOverlap && overlap >= Math.min(2, qTokens.length)) {
+          maxOverlap = overlap;
+          bestDoc = doc;
+        }
+      }
+
+      if (bestDoc?.url && bestDoc.seriesId != null) {
+        this.logger.log(
+          `Token overlap DB fallback found: "${name}" -> "${bestDoc.name}" (${bestDoc.url})`,
+        );
+        return { slug: bestDoc.url, seriesId: bestDoc.seriesId };
+      }
     }
 
     return null;
@@ -1973,6 +2062,19 @@ export class CollegesService implements OnModuleInit {
         // First two significant words (e.g. "Visva Bharati")
         queries.add(`${nonGeneric[0]} ${nonGeneric[1]}`);
       }
+    }
+
+    // Add variant without standalone acronyms (e.g. "PDIT", "YITS", "SRES")
+    const withoutAcronyms = trimmed
+      .replace(/\b[A-Z0-9]{2,6}\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (
+      withoutAcronyms &&
+      withoutAcronyms !== trimmed &&
+      withoutAcronyms.length > 3
+    ) {
+      queries.add(withoutAcronyms);
     }
 
     // Existing safe variants

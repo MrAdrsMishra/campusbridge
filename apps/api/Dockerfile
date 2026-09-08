@@ -1,3 +1,12 @@
+# ---- Development stage ----
+FROM node:22-alpine AS dev
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "start:dev"]
+
 # ---- Build API (NestJS) ----
 FROM node:22-alpine AS build-api
 WORKDIR /app
